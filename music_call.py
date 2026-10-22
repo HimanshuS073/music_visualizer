@@ -1,7 +1,7 @@
 import shutil
 import subprocess
+import sys
 
-import yt_dlp
 from ytmusicapi import YTMusic
 
 
@@ -17,35 +17,57 @@ def play_song(song):
         return
 
     video_url = f"https://www.youtube.com/watch?v={video_id}"
-    options = {
-        "format": "bestaudio/best",
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-    }
-
+    downloader = None
+    player = None
     try:
-        with yt_dlp.YoutubeDL(options) as downloader:
-            info = downloader.extract_info(video_url, download=False)
-
-        stream_url = info.get("url")
-        if not stream_url:
-            print("yt-dlp could not find an audio stream for this song.")
-            return
-
-        headers = info.get("http_headers", {})
-        header_arg = "".join(f"{key}: {value}\r\n" for key, value in headers.items())
-        command = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "warning"]
-        if header_arg:
-            command.extend(["-headers", header_arg])
-        command.append(stream_url)
+        # Let yt-dlp make and maintain the media request. Passing its signed
+        # URL to ffplay directly can fail when YouTube binds it to a session/IP.
+        downloader = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "yt_dlp",
+                "--quiet",
+                "--no-warnings",
+                "--no-progress",
+                "--no-playlist",
+                "--format",
+                "bestaudio/best",
+                "--output",
+                "-",
+                video_url,
+            ],
+            stdout=subprocess.PIPE,
+        )
+        player = subprocess.Popen(
+            ["ffplay", "-nodisp", "-autoexit", "-loglevel", "warning", "-i", "pipe:0"],
+            stdin=downloader.stdout,
+        )
+        downloader.stdout.close()
 
         print("\nStreaming audio without saving it. Press Ctrl+C to stop.")
-        subprocess.run(command, check=False)
+        player_status = player.wait()
+        downloader_status = downloader.wait()
+        if player_status:
+            print("ffplay could not play this stream.")
+        elif downloader_status:
+            print("yt-dlp could not finish the audio stream.")
     except KeyboardInterrupt:
         print("\nPlayback stopped.")
+        for process in (player, downloader):
+            if process and process.poll() is None:
+                process.terminate()
+        for process in (player, downloader):
+            if process:
+                process.wait()
     except Exception as error:
         print(f"Could not play this song: {error}")
+        for process in (player, downloader):
+            if process and process.poll() is None:
+                process.terminate()
+        for process in (player, downloader):
+            if process:
+                process.wait()
 
 
 def main():

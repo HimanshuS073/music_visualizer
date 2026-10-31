@@ -52,6 +52,44 @@ python music_call.py
 
 Enter a song or artist search, then enter the number of a result to play it. Press Enter at the selection prompt to search again, or enter `q` at the search prompt to quit.
 
+## Run the player with immediate keyboard controls (Linux)
+
+`music_call_just_yt_dlp.py` uses mpv for streaming and playback controls,
+yt-dlp for searches, and optional Chafa for terminal covers:
+
+```bash
+sudo pacman -S mpv python-yt-dlp chafa
+python music_call_just_yt_dlp.py
+```
+
+Type the first song name and press Enter. Once results appear, enter a result
+number and press Enter to play it. Playback keys below act immediately:
+
+| Key | Action |
+| --- | --- |
+| Space | Pause or resume |
+| `>` or `a` | Forward 10 seconds |
+| `<` or `d` | Backward 10 seconds |
+| `s` | Open search input; type a name and press Enter |
+| `c` | Reload the current song's cover |
+| `x` | Stop playback |
+| `q` | Quit |
+
+Search input accepts ordinary text, including spaces and the shortcut letters.
+After submitting a search, the playback keys work while results load. In search
+input, type `q` and Enter to quit, or press Ctrl+C to leave search input and stop.
+Audio starts and covers load in the background when selecting a result.
+
+The reusable action functions in the script are `search_songs(query)`,
+`play_song(player, song)`, `load_image(song)`, `load_song_image(player)`,
+`pause_song(player)`, `resume_song(player)`, `play_pause(player)`,
+`forward_song(player, seconds=10)`, `backward_song(player, seconds=10)`,
+and `stop_song(player)`. Create a `MusicPlayer()` instance to call playback
+functions; call `player.stop()` in a `finally` block when finished.
+`keyboard_loop()` polls keys, `handle_key()` dispatches actions, and `SearchTask`
+runs cancellable searches outside the keyboard loop. Importing the script does
+not start the terminal interface.
+
 ## Run the LÖVE scaffold
 
 Install [LÖVE](https://love2d.org/) and launch the repository directory with it:

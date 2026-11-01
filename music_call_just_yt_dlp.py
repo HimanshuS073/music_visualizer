@@ -1,122 +1,50 @@
-"""Search for music, play a result, and control it with the keyboard.
-
-Start reading at main() at the bottom. Each player action has its own function.
-Searching and cover loading use threads so they don't hold up the keyboard.
-"""
+"""Run the terminal player, or use --api to call music functions from another app."""
 
 import codecs
 import json
 import os
-import queue
-import re
 import select
-import shutil
 import signal
-import socket
-import subprocess
 import sys
-import tempfile
+import subprocess
 import termios
 import threading
-import time
-import tty
-import urllib.request
 
-SEARCH_PROMPT = "Search song: "
-CONTROL_PROMPT = "Space pause | a/> +10s | d/< -10s | s search | c cover | x stop | q quit | result #: "
-INPUT_PROMPT = SEARCH_PROMPT
+from python_code_music import (
+    create_player, search_songs, play_song, stop_song, pause_song, resume_song,
+    play_pause, forward_song, backward_song, get_status, send_command,
+    load_image, show_image, thumbnail_url, fetch_thumbnail,
+)
+from python_code_music.playback import exit_on_signal
+
+
+
+INPUT_PROMPT = "Song name or result number: "
 INPUT_ACTIVE = threading.Event()
 INPUT_BUFFER = ""
 DISPLAY_LOCK = threading.RLock()
+MACHINE_MODE = False
 
 
-# Small helpers for writing to the terminal.
 def show_message(message, error=False):
     """Print a message, then put back any search text the user was typing."""
     output = sys.stdout
-    if error:
+    if error or MACHINE_MODE:
         output = sys.stderr
     with DISPLAY_LOCK:
         print(f"\n{message}", file=output, flush=True)
-        if INPUT_ACTIVE.is_set() and sys.stdout.isatty():
+        if not MACHINE_MODE and INPUT_ACTIVE.is_set() and sys.stdout.isatty():
             print(INPUT_PROMPT + INPUT_BUFFER, end="", flush=True)
 
 
-# Search for songs. The optional event lets us stop an old search.
-def search_songs(query, cancelled=None):
-    """Ask yt-dlp for up to ten matching songs."""
-    query = query.strip()
-    if not query:
-        return []
-    if cancelled is None:
-        cancelled = threading.Event()
-    process = None
-    try:
-        process = subprocess.Popen(
-            [sys.executable, "-m", "yt_dlp", "--flat-playlist",
-             "--dump-single-json", "--no-warnings", "--socket-timeout", "15",
-             "--retries", "2", f"ytsearch10:{query}"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, start_new_session=True,
-        )
-        deadline = time.monotonic() + 45
-        while True:
-            if cancelled.is_set():
-                return []
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError("Search timed out. Please try again.")
-            try:
-                output, errors = process.communicate(timeout=min(.1, remaining))
-                break
-            except subprocess.TimeoutExpired:
-                continue
-        if process.returncode:
-            raise ValueError(errors.strip() or "YouTube search failed")
-        payload = json.loads(output)
-        if not isinstance(payload, dict):
-            raise ValueError("YouTube returned an invalid result")
-        entries = payload.get("entries", [])
-        if not isinstance(entries, list):
-            raise ValueError("YouTube returned an invalid result list")
-        songs = []
-        for song in entries:
-            if not isinstance(song, dict):
-                continue
-            if isinstance(song.get("id"), str) and song["id"]:
-                songs.append(song)
-        return songs
-    except (OSError, ValueError) as error:
-        if not cancelled.is_set():
-            show_message(f"Search failed: {error}", error=True)
-        return []
-    finally:
-        if process is not None:
-            stop_process(process)
-            for stream in (process.stdout, process.stderr):
-                stream.close()
-
-
-# Download and draw the cover without making playback wait.
-def load_image(song, cancelled=None, display_lock=None):
+def draw_cover(song, cancelled=None, display_lock=None):
     """Load the selected song's thumbnail and draw it with Chafa."""
     if cancelled is None:
         cancelled = threading.Event()
     if display_lock is None:
         display_lock = threading.Lock()
-    if not shutil.which("chafa"):
-        if not cancelled.is_set():
-            show_message("To display covers: sudo pacman -S chafa", error=True)
-        return
-    image_url = song.get("thumbnail") or (
-        f"https://i.ytimg.com/vi/{song['id']}/hqdefault.jpg"
-    )
     try:
-        request = urllib.request.Request(
-            image_url, headers={"User-Agent": "Mozilla/5.0"},
-        )
-        with urllib.request.urlopen(request, timeout=5) as response:
-            image_data = response.read(10 * 1024 * 1024)
+        image_data = fetch_thumbnail(song)
         if cancelled.is_set():
             return
         # Probing asks the terminal questions and can put its replies in our input.
@@ -134,15 +62,13 @@ def load_image(song, cancelled=None, display_lock=None):
             print(rendered.stdout.decode("utf-8", "replace"), end="", flush=True)
             if INPUT_ACTIVE.is_set() and sys.stdout.isatty():
                 print(INPUT_PROMPT + INPUT_BUFFER, end="", flush=True)
+    except FileNotFoundError:
+        if not cancelled.is_set():
+            show_message("To display covers: sudo pacman -S chafa", error=True)
     except (subprocess.SubprocessError, OSError, ValueError) as error:
         with display_lock:
             if not cancelled.is_set():
                 show_message(f"Could not display thumbnail: {error}", error=True)
-
-
-def show_image(song, cancelled=None, display_lock=None):
-    """The old name still works if another script uses it."""
-    return load_image(song, cancelled, display_lock)
 
 
 class ThumbnailDisplay:
@@ -161,235 +87,25 @@ class ThumbnailDisplay:
             cancelled = self.cancelled
         # Ignore the old cover if the user picks another song before it loads.
         threading.Thread(
-            target=show_image, args=(dict(song), cancelled, self.lock), daemon=True,
+            target=draw_cover, args=(dict(song), cancelled, self.lock), daemon=True,
         ).start()
 
 
-def stop_process(process):
-    """Stop a program and the helper programs it started."""
-    if process is None:
-        return
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    try:
-        process.wait(timeout=1.5)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.wait()
-
-
-def read_playback_error(player_log, log_path):
-    """Read the useful error lines and leave long stream URLs out of the message."""
-    player_log.seek(0)
-    detail = player_log.read(8192).decode("utf-8", "replace").strip()
-    if os.path.exists(log_path):
-        errors = []
-        with open(log_path, encoding="utf-8", errors="replace") as log:
-            for line in log:
-                if "[e]" in line or "[f]" in line or "[w]" in line:
-                    errors.append(line.strip())
-        if errors:
-            detail = "\n".join(errors[-16:])
-    detail = re.sub(r"https?://[^\s'\"]+", "[media URL]", detail)
-    return detail or "No diagnostic output."
-
-
-# This object keeps the current song, mpv process, and cover together.
-class MusicPlayer:
-    def __init__(self):
-        self.song = None
-        self.player = None
-        self.worker = None
-        self.directory = None
-        self.socket_path = None
-        self.cancelled = threading.Event()
-        self.cover = ThumbnailDisplay()
-
-    def stop(self):
-        self.cover.clear()
-        self.cancelled.set()
-        stop_process(self.player)
-        if self.worker is not None:
-            self.worker.join()
-        if self.directory is not None:
-            self.directory.cleanup()
-        self.player = None
-        self.worker = None
-        self.directory = None
-        self.socket_path = None
-        self.song = None
-
-    def play(self, song):
-        # Always stop the previous track before starting the new one.
-        self.stop()
-        self.cancelled = threading.Event()
-        player_log = tempfile.TemporaryFile()
-        try:
-            self.directory = tempfile.TemporaryDirectory(prefix="music-mpv-")
-            self.socket_path = os.path.join(self.directory.name, "ipc")
-            log_path = os.path.join(self.directory.name, "mpv.log")
-            # Use the same Python environment for mpv extraction and searches.
-            extractor = os.path.join(self.directory.name, "yt-dlp")
-            with open(extractor, "w", encoding="utf-8") as script:
-                script.write(f"#!{sys.executable}\nfrom yt_dlp import main\nmain()\n")
-            os.chmod(extractor, 0o700)
-            # These yt-dlp options fixed the YouTube 403 error in this player.
-            self.player = subprocess.Popen(
-                ["mpv", "--no-config", "--no-video", "--no-terminal",
-                 "--input-terminal=no", "--ytdl=yes", "--ytdl-format=bestaudio/best",
-                 f"--script-opts=ytdl_hook-ytdl_path={extractor}",
-                 f"--input-ipc-server={self.socket_path}",
-                 f"--log-file={log_path}",
-                 "--ytdl-raw-options=socket-timeout=15,retries=2,force-ipv4=,check-formats=",
-                 f"https://www.youtube.com/watch?v={song['id']}"],
-                stdin=subprocess.DEVNULL, stdout=player_log, stderr=player_log,
-                start_new_session=True,
-            )
-            self.song = song
-            self.worker = threading.Thread(
-                target=self._watch,
-                args=(self.player, self.cancelled, player_log, log_path), daemon=True,
-            )
-            self.worker.start()
-        except BaseException:
-            self.stop()
-            player_log.close()
-            raise
-        print(f"\nStarting: {song.get('title') or 'Unknown title'}")
-        print("Space: pause/resume | a/>: +10s | d/<: -10s | s: search")
-        self.cover.show(song)
-
-    def command(self, *command):
-        """Send a command to mpv through its local socket and wait for the reply."""
-        if self.player is None or self.player.poll() is not None:
-            raise OSError("Select a song first.")
-        deadline = time.monotonic() + 1
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-            connection.settimeout(1)
-            while True:
-                try:
-                    connection.connect(self.socket_path)
-                    break
-                except (FileNotFoundError, ConnectionRefusedError):
-                    if time.monotonic() >= deadline:
-                        raise OSError("Player is starting; try the key again.")
-                    time.sleep(0.03)
-            message = {"command": list(command), "request_id": 1}
-            connection.sendall((json.dumps(message) + "\n").encode())
-            with connection.makefile("rb") as replies:
-                while time.monotonic() < deadline + 1:
-                    line = replies.readline(65536)
-                    if not line:
-                        break
-                    reply = json.loads(line)
-                    if reply.get("request_id") == 1:
-                        if reply.get("error") != "success":
-                            raise OSError(f"Control unavailable while loading: {reply.get('error')}")
-                        return reply.get("data")
-        raise OSError("Player did not acknowledge the command.")
-
-    @staticmethod
-    def _watch(player, cancelled, player_log, log_path):
-        try:
-            player.wait()
-            if cancelled.is_set():
-                return
-            if player.returncode:
-                detail = read_playback_error(player_log, log_path)
-                show_message(f"Playback failed (exit {player.returncode}). {detail}", error=True)
-            else:
-                show_message("Track finished.")
-        finally:
-            stop_process(player)
-            player_log.close()
-
-
-# Individual actions: these functions don't need to know which key was pressed.
-def play_song(player, song):
-    """Replace the current track and load its cover in the background."""
-    player.play(song)
-    return f"Selected: {song.get('title') or 'Unknown title'}"
-
-
-def stop_song(player):
-    player.stop()
-    return "Playback stopped."
-
-
-def pause_song(player):
-    player.command("set_property", "pause", True)
-    return "Paused."
-
-
-def resume_song(player):
-    player.command("set_property", "pause", False)
-    return "Playing."
-
-
-def play_pause(player):
-    """Pause if music is playing, or continue if it is paused."""
-    player.command("cycle", "pause")
-    if player.command("get_property", "pause"):
-        return "Paused."
-    return "Playing."
-
-
-def forward_song(player, seconds=10):
-    player.command("seek", abs(seconds), "relative+exact")
-    return f"Forward {abs(seconds)} seconds."
-
-
-def backward_song(player, seconds=10):
-    player.command("seek", -abs(seconds), "relative+exact")
-    return f"Backward {abs(seconds)} seconds."
-
-
 def load_song_image(player):
-    if player.song is None:
+    if player["song"] is None:
         raise ValueError("Select a song first.")
-    player.cover.show(player.song)
+    player["cover"].show(player["song"])
     return "Loading cover..."
 
-
-def control_key(player, key):
-    """Check the key and call the matching player function."""
-    try:
-        if key == " ":
-            message = play_pause(player)
-        elif key == ">" or key == "a":
-            message = forward_song(player)
-        elif key == "<" or key == "d":
-            message = backward_song(player)
-        elif key == "x":
-            message = stop_song(player)
-        elif key == "c":
-            message = load_song_image(player)
-        else:
-            return False
-    except (OSError, ValueError) as error:
-        message = str(error)
-    show_message(message)
-    return True
-
-
-def display_results(query, results):
-    with DISPLAY_LOCK:
-        print(f"\nResults for {query!r}:")
-        if not results:
-            print("No results found. Press s to search again.")
-        for index, song in enumerate(results, 1):
-            print(f"{index}. {song.get('title') or 'Unknown title'}")
 
 
 class SearchTask:
     """Search in a thread so playback keys keep working while results load."""
-    def __init__(self):
-        self.events = queue.Queue()
+    def __init__(self, raise_errors=False):
+        self.raise_errors = raise_errors
+        self.error = None
+        self.result = None
+        self.lock = threading.Lock()
         self.cancelled = threading.Event()
         self.worker = None
 
@@ -398,11 +114,9 @@ class SearchTask:
         if self.worker is not None:
             self.worker.join()
         self.worker = None
-        while True:
-            try:
-                self.events.get_nowait()
-            except queue.Empty:
-                break
+        with self.lock:
+            self.result = None
+            self.error = None
 
     def start(self, query):
         self.stop()
@@ -413,18 +127,26 @@ class SearchTask:
         self.worker.start()
 
     def _search(self, query, cancelled):
-        results = search_songs(query, cancelled)
-        if not cancelled.is_set():
-            self.events.put((query, results))
+        error = None
+        try:
+            results = search_songs(query, cancelled)
+        except (OSError, ValueError) as problem:
+            error = str(problem)
+            results = []
+            if not self.raise_errors and not cancelled.is_set():
+                show_message(f"Search failed: {problem}", error=True)
+        with self.lock:
+            if not cancelled.is_set():
+                self.error = error
+                self.result = (query, results)
 
     def get_results(self):
-        try:
-            return self.events.get_nowait()
-        except queue.Empty:
-            return None
+        with self.lock:
+            result = self.result
+            self.result = None
+            return result
 
 
-# Read one key at a time. This is why playback keys don't need Enter.
 class Keyboard:
     """Read keys without Enter, then restore the terminal when we finish."""
     def __init__(self):
@@ -438,7 +160,14 @@ class Keyboard:
     def start(self):
         if sys.stdin.isatty():
             self.previous = termios.tcgetattr(self.fd)
-            tty.setcbreak(self.fd, when=termios.TCSANOW)
+            settings = termios.tcgetattr(self.fd)
+            # Read each key without Enter or automatic terminal echo.
+            settings[3] &= ~(termios.ICANON | termios.ECHO)
+            settings[6][termios.VMIN] = 1
+            settings[6][termios.VTIME] = 0
+            # Let Ctrl+Q reach our loop instead of being used for flow control.
+            settings[0] &= ~(termios.IXON | termios.IXOFF)
+            termios.tcsetattr(self.fd, termios.TCSANOW, settings)
 
     def stop(self):
         if self.previous is not None:
@@ -457,7 +186,7 @@ class Keyboard:
             self.pending = self.pending[1:]
             # Terminal color replies and escape sequences are not user input.
             if self.escape == "start":
-                if key == "[":
+                if key == "[" or key == "O":
                     self.escape = "csi"
                 elif key == "]":
                     self.escape = "osc"
@@ -468,6 +197,10 @@ class Keyboard:
             elif self.escape == "csi":
                 if "@" <= key <= "~":
                     self.escape = None
+                    if key == "C":
+                        return "RIGHT"
+                    if key == "D":
+                        return "LEFT"
             elif self.escape in ("osc", "string"):
                 if key == "\x07":
                     self.escape = None
@@ -485,21 +218,47 @@ class Keyboard:
         return None
 
 
+def control_key(player, key):
+    """Check the key and call the matching player function."""
+    try:
+        if key == " ":
+            message = play_pause(player)
+        elif key == "RIGHT":
+            message = forward_song(player)
+        elif key == "LEFT":
+            message = backward_song(player)
+        elif key == "\x18":
+            player["cover"].clear()
+            message = stop_song(player)
+        elif key == "\x0c":
+            message = load_song_image(player)
+        else:
+            return False
+    except (OSError, ValueError) as error:
+        message = str(error)
+    show_message(message)
+    return True
+
+
+def display_results(query, results):
+    with DISPLAY_LOCK:
+        print(f"\nResults for {query!r}:")
+        if not results:
+            print("No results found. Type another song name to search again.")
+        for index, song in enumerate(results, 1):
+            print(f"{index}. {song.get('title') or 'Unknown title'}")
+
+
 class InterfaceState:
     """Remember the input text and the latest list of songs."""
     def __init__(self):
-        self.search_mode = True
         self.buffer = ""
         self.results = []
 
 
 def redraw_prompt(state):
-    global INPUT_PROMPT, INPUT_BUFFER
+    global INPUT_BUFFER
     with DISPLAY_LOCK:
-        if state.search_mode:
-            INPUT_PROMPT = SEARCH_PROMPT
-        else:
-            INPUT_PROMPT = CONTROL_PROMPT
         INPUT_BUFFER = state.buffer
         if sys.stdout.isatty():
             print("\r\033[2K" + INPUT_PROMPT + INPUT_BUFFER, end="", flush=True)
@@ -511,46 +270,45 @@ def select_song(player, results, number):
         index = int(number) - 1
         if not 0 <= index < len(results):
             raise ValueError("Choose a number from the latest results.")
+        player["cover"].clear()
         play_song(player, results[index])
+        player["cover"].show(results[index])
     except (OSError, ValueError) as error:
         show_message(str(error), error=True)
 
 
 def handle_key(key, state, player, search):
     """Handle one key. False means the user wants to quit."""
-    if key == "" or key == "\x04":
+    if key in ("", "\x04", "\x11"):
         return False
     if key == "\x03":
         raise KeyboardInterrupt
-    if key in ("\x7f", "\b"):
+    if key in ("LEFT", "RIGHT", "\x18", "\x0c"):
+        control_key(player, key)
+    elif key == " " and not state.buffer:
+        control_key(player, key)
+    elif key in ("\x7f", "\b"):
         state.buffer = state.buffer[:-1]
     elif key == "\x15":
         state.buffer = ""
-    elif state.search_mode:
-        if key in ("\r", "\n"):
-            query = state.buffer.strip()
-            if query.lower() in {"q", "quit", "exit"}:
-                return False
+    elif key in ("\r", "\n"):
+        query = state.buffer.strip()
+        state.buffer = ""
+        if query.lower() in ("q", "quit", "exit"):
+            return False
+        if not query:
+            return True
+        if query.isdecimal() and state.results:
+            select_song(player, state.results, query)
+        else:
+            # Every song name starts a fresh search, even while music is playing.
+            if query.lower().startswith("search "):
+                query = query[7:].strip()
             if query:
                 state.results = []
-                state.buffer = ""
-                state.search_mode = False
                 print(f"\nSearching for {query!r}...", flush=True)
                 search.start(query)
-        elif key.isprintable():
-            state.buffer += key
-    elif key == "q":
-        return False
-    elif key == "s":
-        state.search_mode = True
-        state.buffer = ""
-    elif key in (" ", ">", "<", "a", "d", "x", "c"):
-        control_key(player, key)
-    elif key in ("\r", "\n"):
-        if state.buffer:
-            select_song(player, state.results, state.buffer)
-            state.buffer = ""
-    elif key.isdecimal():
+    elif key.isprintable():
         state.buffer += key
     return True
 
@@ -587,24 +345,24 @@ def keyboard_loop(player, search):
 
             except KeyboardInterrupt:
                 search.stop()
+                player["cover"].clear()
                 stop_song(player)
                 state.buffer = ""
-                state.search_mode = False
-                print("\nStopped. Press s to search or q to quit.", flush=True)
+                print("\nStopped. Type another song name or press Ctrl+Q to quit.", flush=True)
                 redraw_prompt(state)
     finally:
         INPUT_ACTIVE.clear()
         keyboard.stop()
 
 
-def exit_on_signal(signum, _frame):
-    # Raising here runs main's finally block even when the terminal is closed.
-    raise SystemExit(128 + signum)
-
-
 def check_dependencies():
-    if not shutil.which("mpv"):
-        print("Install playback dependency: sudo pacman -S mpv", file=sys.stderr)
+    try:
+        subprocess.run(
+            ["mpv", "--version"], check=True, timeout=10,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except (subprocess.SubprocessError, OSError):
+        show_message("Install playback dependency: sudo pacman -S mpv", error=True)
         return False
     try:
         subprocess.run(
@@ -617,29 +375,217 @@ def check_dependencies():
     return True
 
 
-# Start here: check the tools, listen for keys, and clean up when finished.
-def main():
+def run_terminal():
     if not check_dependencies():
         return 1
-    player = MusicPlayer()
+    player = create_player(on_message=show_message)
+    player["cover"] = ThumbnailDisplay()
     search = SearchTask()
     handlers = {}
     print("Type your first song name and press Enter.")
     print("After searching: enter a result number, then Enter to play.")
-    print("Immediate keys: Space pause/resume, a/> forward, d/< backward,")
-    print("s search, c cover, x stop, q quit. Search mode accepts normal text.")
+    print("Immediate keys: Space pause/resume, Right +10s, Left -10s.")
+    print("Ctrl+X stops, Ctrl+L reloads the cover, Ctrl+Q quits.")
+    print("Type another name directly to search. Spaces within names work normally.")
     try:
         for signum in (signal.SIGTERM, signal.SIGHUP):
             handlers[signum] = signal.signal(signum, exit_on_signal)
         keyboard_loop(player, search)
     finally:
         search.stop()
-        player.stop()
+        player["cover"].clear()
+        stop_song(player)
         for signum, handler in handlers.items():
             signal.signal(signum, handler)
     print("\nGoodbye!")
     return 0
 
 
+
+def song_info(song):
+    """Keep the fields another app needs to display a song."""
+    duration = song.get("duration")
+    if type(duration) not in (int, float):
+        duration = None
+    elif duration != duration or abs(duration) == float("inf"):
+        duration = None
+    return {"title": song.get("title") or "Unknown title", "video_id": song["id"],
+            "url": f"https://www.youtube.com/watch?v={song['id']}",
+            "channel": song.get("channel") or song.get("uploader"),
+            "duration": duration, "thumbnail": thumbnail_url(song)}
+
+
+def selected_song(request, results):
+    if "index" in request:
+        index = request["index"]
+        if type(index) is not int or not 1 <= index <= len(results):
+            raise ValueError("Use an index from the latest search, starting at 1.")
+        return results[index - 1]
+    video_id = request.get("video_id")
+    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+    if not isinstance(video_id, str) or len(video_id) != 11:
+        raise ValueError("Provide a result index or an 11-character video_id.")
+    if any(char not in allowed for char in video_id):
+        raise ValueError("Invalid video_id.")
+    for song in results:
+        if song["id"] == video_id:
+            return song
+    return {"id": video_id, "title": video_id}
+
+
+def handle_request(request, player, results):
+    """Call the same functions used by the terminal and return plain data."""
+    command = request.get("command")
+    seconds = request.get("seconds", 10)
+    if command in ("forward", "backward", "seek"):
+        if type(seconds) not in (int, float) or seconds != seconds or abs(seconds) > 86400:
+            raise ValueError("seconds must be a finite number within one day.")
+    if command == "play":
+        song = selected_song(request, results)
+        play_song(player, song)
+        return {"state": "loading", "song": song_info(song)}
+    if command == "pause":
+        return {"message": pause_song(player)}
+    if command == "resume":
+        return {"message": resume_song(player)}
+    if command in ("toggle", "play_pause"):
+        return {"message": play_pause(player)}
+    if command == "forward":
+        return {"message": forward_song(player, seconds)}
+    if command == "backward":
+        return {"message": backward_song(player, seconds)}
+    if command == "seek":
+        send_command(player, "seek", seconds, "relative+exact")
+        return {}
+    if command == "stop":
+        return {"message": stop_song(player)}
+    if command == "status":
+        status = get_status(player)
+        if status["song"]:
+            status["song"] = song_info(status["song"])
+        return status
+    if command == "thumbnail":
+        return {"thumbnail": thumbnail_url(selected_song(request, results))}
+    if command == "results":
+        return {"results": [song_info(song) for song in results]}
+    if command == "quit":
+        return {}
+    raise ValueError("Unknown command.")
+
+
+def reply(request, data=None, error=None):
+    message = {"id": request.get("id"), "ok": error is None}
+    if error is not None:
+        message["error"] = str(error)
+    else:
+        message.update(data or {})
+    print(json.dumps(message, ensure_ascii=False, allow_nan=False), flush=True)
+
+
+def run_api():
+    """Read newline-separated JSON requests until the caller quits or closes stdin."""
+    player = create_player(on_message=show_message)
+    search = SearchTask(raise_errors=True)
+    results = []
+    pending_search = None
+    buffer = b""
+    handlers = {}
+    global MACHINE_MODE
+    previous_mode = MACHINE_MODE
+    MACHINE_MODE = True
+    try:
+        for signum in (signal.SIGTERM, signal.SIGHUP):
+            handlers[signum] = signal.signal(signum, exit_on_signal)
+        while True:
+            completed = search.get_results()
+            if completed is not None and pending_search is not None:
+                query, songs = completed
+                if search.error:
+                    reply(pending_search, error=search.error)
+                else:
+                    results = songs
+                    reply(pending_search, {"query": query, "results": [song_info(song) for song in songs]})
+                pending_search = None
+            if not select.select([sys.stdin.fileno()], [], [], .05)[0]:
+                continue
+            data = os.read(sys.stdin.fileno(), 65536)
+            if not data:
+                return 0
+            buffer += data
+            if len(buffer) > 1024 * 1024:
+                raise ValueError("Request is too large.")
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                if not line.strip():
+                    continue
+                request = {}
+                try:
+                    parsed = json.loads(line)
+                    if not isinstance(parsed, dict):
+                        raise ValueError("Send a JSON object.")
+                    if type(parsed.get("id")) not in (str, int, type(None)):
+                        raise ValueError("id must be a string, integer, or null.")
+                    request = parsed
+                    if request.get("command") == "search":
+                        query = request.get("query")
+                        if not isinstance(query, str) or not query.strip():
+                            raise ValueError("Provide a song name in query.")
+                        if pending_search is not None:
+                            reply(pending_search, error="Cancelled by a newer search.")
+                        results = []
+                        search.start(query.strip())
+                        pending_search = request
+                    else:
+                        reply(request, handle_request(request, player, results))
+                        if request.get("command") == "quit":
+                            return 0
+                except (OSError, ValueError) as error:
+                    reply(request, error=error)
+    except (KeyboardInterrupt, BrokenPipeError):
+        return 0
+    except (OSError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    finally:
+        search.stop()
+        stop_song(player)
+        MACHINE_MODE = previous_mode
+        for signum, handler in handlers.items():
+            signal.signal(signum, handler)
+
+
+def run_search(query):
+    """Take one song name from any language and return one JSON result."""
+    request = {"id": None}
+    query = query.strip()
+    if not query:
+        reply(request, error="Enter a song name.")
+        return 2
+    try:
+        songs = search_songs(query)
+        reply(request, {"query": query, "results": [song_info(song) for song in songs]})
+        return 0
+    except (OSError, ValueError) as error:
+        reply(request, error=error)
+        print(str(error), file=sys.stderr)
+        return 1
+
+
+def main():
+    if sys.argv[1:] == ["--api"]:
+        return run_api()
+    if len(sys.argv) == 3 and sys.argv[1] == "--search":
+        return run_search(sys.argv[2])
+    if sys.argv[1:] in (["-h"], ["--help"]):
+        print("python music_call_just_yt_dlp.py        # terminal player")
+        print("python music_call_just_yt_dlp.py --api  # JSON requests on stdin/stdout")
+        print('python music_call_just_yt_dlp.py --search "song name"  # one JSON result')
+        return 0
+    if sys.argv[1:]:
+        print("Unknown argument. Use --help.", file=sys.stderr)
+        return 2
+    return run_terminal()
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

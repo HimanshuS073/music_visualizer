@@ -1,8 +1,9 @@
-function love.load()
-    love.graphics.setBackgroundColor(0.1, 0.12, 0.18)
-end
-function love.draw()
-    local w = love.graphics.getWidth()
-    local h = love.graphics.getHeight()
-    love.graphics.setColor(1, 1, 1)
+-- mpv handles sound. These unused LÖVE modules do not need to start.
+function love.conf(t)
+    t.modules.audio = false
+    t.modules.sound = false
+    t.modules.physics = false
+    t.modules.joystick = false
+    t.modules.video = false
+    t.window.resizable = true
 end

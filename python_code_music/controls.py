@@ -33,8 +33,15 @@ def backward_song(player, seconds=10):
 def get_status(player):
     process = player["player"]
     running = process is not None and process.poll() is None
-    status = {"running": running, "ready": False, "song": player["song"],
-              "error": player["error"], "paused": None, "position": None, "duration": None}
+    status = {
+        "running": running,
+        "ready": False,
+        "song": player["song"],
+        "error": player["error"],
+        "paused": None,
+        "position": None,
+        "duration": None,
+    }
     if running:
         try:
             status["paused"] = send_command(player, "get_property", "pause")

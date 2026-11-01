@@ -1,5 +1,6 @@
 """Run the terminal player, or use --api to call music functions from another app."""
 
+import base64
 import codecs
 import json
 import os
@@ -14,6 +15,8 @@ from python_code_music import (
     create_player, search_songs, play_song, stop_song, pause_song, resume_song,
     play_pause, forward_song, backward_song, get_status, send_command,
     load_image, show_image, thumbnail_url, fetch_thumbnail,
+    start_spectrum, get_spectrum, stop_spectrum,
+    get_video_palette,
 )
 from python_code_music.playback import exit_on_signal
 
@@ -442,8 +445,32 @@ def handle_request(request, player, results):
             raise ValueError("seconds must be a finite number within one day.")
     if command == "play":
         song = selected_song(request, results)
-        play_song(player, song)
+        spectrum = request.get("spectrum", False)
+        fft_size, sample_rate = request.get("fft_size", 1024), request.get("sample_rate", 44100)
+        if spectrum:
+            if type(fft_size) is not int or fft_size not in (256, 512, 1024, 2048, 4096):
+                raise ValueError("Invalid FFT size.")
+            if type(sample_rate) is not int or sample_rate not in (11025, 22050, 44100, 48000):
+                raise ValueError("Invalid spectrum sample rate.")
+        # Try PulseAudio/PipeWire's compatibility output, with normal mpv fallback.
+        play_song(player, song, audio_output="pulse," if spectrum else None,
+                  video_colors=request.get("video_colors", False),
+                  video_color_fps=request.get("video_color_fps", 8))
+        if spectrum:
+            start_spectrum(player, fft_size, sample_rate)
         return {"state": "loading", "song": song_info(song)}
+    if command == "video_palette":
+        try:
+            return get_video_palette(player, request.get("sequence"))
+        except OSError:
+            return {"available": False, "reason": "Waiting for a decoded video frame."}
+    if command == "spectrum_start":
+        return start_spectrum(player, request.get("fft_size", 1024), request.get("sample_rate", 44100))
+    if command == "spectrum_stop":
+        stop_spectrum(player)
+        return {}
+    if command == "spectrum":
+        return get_spectrum(player, request.get("sequence"))
     if command == "pause":
         return {"message": pause_song(player)}
     if command == "resume":
@@ -482,21 +509,70 @@ def reply(request, data=None, error=None):
     print(json.dumps(message, ensure_ascii=False, allow_nan=False), flush=True)
 
 
+class ImageTask:
+    """Fetch a cover without blocking search or playback requests."""
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.cancelled = threading.Event()
+        self.result = None
+
+    def stop(self):
+        with self.lock:
+            self.cancelled.set()
+            self.result = None
+
+    def start(self, song):
+        self.stop()
+        with self.lock:
+            self.cancelled = threading.Event()
+            cancelled = self.cancelled
+        threading.Thread(target=self.fetch, args=(song, cancelled), daemon=True).start()
+
+    def fetch(self, song, cancelled):
+        data, error = None, None
+        try:
+            image = fetch_thumbnail(song, high_resolution=True)
+            if not cancelled.is_set():
+                data = base64.b64encode(image).decode("ascii")
+        except (OSError, ValueError) as problem:
+            error = str(problem)
+        with self.lock:
+            if not cancelled.is_set():
+                self.result = (song["id"], data, error)
+
+    def get_result(self):
+        with self.lock:
+            result = self.result
+            self.result = None
+            return result
+
+
 def run_api():
     """Read newline-separated JSON requests until the caller quits or closes stdin."""
+    global MACHINE_MODE
     player = create_player(on_message=show_message)
     search = SearchTask(raise_errors=True)
+    images = ImageTask()
     results = []
     pending_search = None
+    pending_image = None
     buffer = b""
     handlers = {}
-    global MACHINE_MODE
     previous_mode = MACHINE_MODE
     MACHINE_MODE = True
     try:
         for signum in (signal.SIGTERM, signal.SIGHUP):
             handlers[signum] = signal.signal(signum, exit_on_signal)
         while True:
+            image_result = images.get_result()
+            if image_result is not None and pending_image is not None:
+                video_id, image, error = image_result
+                if error:
+                    reply(pending_image, error=error)
+                else:
+                    reply(pending_image, {"video_id": video_id, "image": image,
+                                          "encoding": "base64"})
+                pending_image = None
             completed = search.get_results()
             if completed is not None and pending_search is not None:
                 query, songs = completed
@@ -506,7 +582,8 @@ def run_api():
                     results = songs
                     reply(pending_search, {"query": query, "results": [song_info(song) for song in songs]})
                 pending_search = None
-            if not select.select([sys.stdin.fileno()], [], [], .05)[0]:
+            wait = .015 if pending_search is not None or pending_image is not None else .05
+            if not select.select([sys.stdin.fileno()], [], [], wait)[0]:
                 continue
             data = os.read(sys.stdin.fileno(), 65536)
             if not data:
@@ -535,6 +612,12 @@ def run_api():
                         results = []
                         search.start(query.strip())
                         pending_search = request
+                    elif request.get("command") == "image":
+                        song = selected_song(request, results)
+                        if pending_image is not None:
+                            reply(pending_image, error="Cancelled by a newer image.")
+                        images.start(song)
+                        pending_image = request
                     else:
                         reply(request, handle_request(request, player, results))
                         if request.get("command") == "quit":
@@ -547,6 +630,7 @@ def run_api():
         print(str(error), file=sys.stderr)
         return 1
     finally:
+        images.stop()
         search.stop()
         stop_song(player)
         MACHINE_MODE = previous_mode

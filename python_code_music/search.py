@@ -33,7 +33,7 @@ def search_songs(query, cancelled=None):
             if remaining <= 0:
                 raise TimeoutError("Search timed out. Please try again.")
             try:
-                output, errors = process.communicate(timeout=min(.1, remaining))
+                output, errors = process.communicate(timeout=min(.05, remaining))
                 break
             except subprocess.TimeoutExpired:
                 continue

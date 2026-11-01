@@ -8,9 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "python-dotenv>=1.2.3",
     "yt-dlp>=2026.10.21",
-    "ytmusicapi>=1.12.3",
 ]
 
 [project.scripts]

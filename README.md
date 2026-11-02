@@ -1,286 +1,228 @@
 # Music Player
 
-A simple music player for Linux, Windows, and Android. Search YouTube, choose a
-song, and listen with playback controls and an audio visualizer.
+A small music player I'm building for myself. Search YouTube, pick a song, and
+keep listening while you look for the next one.
 
-Music, thumbnails, and sampled video frames are not saved to disk.
+The desktop app uses Lua with LÖVE for the window, Python and yt-dlp for search,
+and mpv for playback. There's also an Android version with touch controls.
+Both have a cover background and audio bars that follow the music.
 
-## Install
+Songs stream without being saved as music files. Cover images and the video
+frames used for bar colors stay in memory too.
 
-On CachyOS or Arch Linux:
+## Run it on Linux
+
+On CachyOS or Arch, install the dependencies:
 
 ```bash
 sudo pacman -S python python-yt-dlp mpv love libpulse
 ```
 
-For cover images in the terminal, install Chafa too:
-
-```bash
-sudo pacman -S chafa
-```
-
-## Run the window player
-
-Open a terminal in the project folder:
+Then open the project folder and run:
 
 ```bash
 ./music-player
 ```
 
-`music-player` is an executable Linux launcher. It finds the project even when
-started from another directory or through a symbolic link. Keep it beside the
-other project files. It uses the installed LÖVE, Python, yt-dlp, mpv, and libpulse
-programs; it is not a self-contained Windows `.exe` or AppImage.
-You can still launch the window with `love .`.
+You can also use `love .`. Keep the launcher beside the source files; it finds
+them even when you start it from another directory.
 
-Press **S**, type a song name, and press **Enter**. Results appear in the same
-panel on the right. Click a result, or use **Up/Down** and **Enter**, to play it.
-Use the mouse wheel to see more results.
-
-The selected song's cover becomes a blurred, low-contrast background. The player
-tries the highest available YouTube thumbnail and falls back if it is missing.
-It loads images in memory and caches the blur until the song or window size changes.
-
-**Space** pauses or resumes, **Left/Right** seek 10 seconds, and **S** opens another
-search while the current song keeps playing. **Escape** closes the search panel.
-You can also click the playback buttons at the bottom. Close the window to stop.
-
-`music_backend.lua` handles the connection using LuaJIT, which comes with LÖVE.
-If your Python dependencies are in a virtual environment, run
-`MUSIC_PYTHON=/path/to/.venv/bin/python love .`. This window connection is for Linux.
-
-## FFT bars and settings
-
-The bars show a real FFT of mpv's own audio output. They use PipeWire/PulseAudio
-monitoring through `pactl` and `parec` (provided by `libpulse`). Audio is decoded
-once; the FFT runs in LuaJIT without NumPy or extra Lua packages.
-
-Edit **`config.lua`** and press **F5** to reload the bars and background settings.
-You can change the bar count, width, height, spacing, rounding, opacity, smoothing,
-gain, frequency range, and update rate. The visualizer spans left to right just
-above the controls, with space reserved while the search panel is open.
-`fill_width` spreads the bars across that strip; `gap` is then the minimum gap.
-Use `bottom_gap` to change the distance from the controls.
-By default, bar colors come from **actual video frames at the current playback
-position**. mpv plays the audio and decodes a low-resolution video stream in the
-same process. It samples a 64×36 frame in memory and sends only RGB colors to Lua.
-Seeking changes the sampled scene too; pausing stops color changes.
-
-- `color_source = "video"` uses changing video frames. `"thumbnail"` uses the cover
-  and keeps playback audio-only.
-- `video_color_fps = 8` samples eight frames per second (allowed: 1–30). Lower
-  values reduce work. This setting and `color_source` apply when selecting a song.
-- `color_mode = "random"` assigns each bar a random color from the latest frame's
-  palette on a timer. `"per_song"` keeps
-  assignments until the sampled palette changes.
-- `color_change_speed = 10` changes bar colors ten times per second (allowed:
-  0.1–144, limited by rendering FPS). Use `2` for slower changes or `30` for faster
-  changes. Press **F5** after editing it. Video sampling and FFT motion keep their
-  own speeds; new video palettes wait for the next color change.
-- `palette_size` limits the number of sampled colors used by the bars.
-
-The background still uses the blurred cover. No frame images are written to disk
-or sent to the window. Video sampling adds some bandwidth and decoding work;
-choose `"thumbnail"` if you want audio-only playback. Audio-only videos have no
-video palette, so bars retain their neutral default colors.
-
-Defaults are 48 bars and a 1024-sample FFT at 44.1 kHz, targeting 60 spectrum
-updates per second. Damped motion smooths the bars between readings. Requests
-are sent immediately and old audio frames are discarded.
-The frame cap is applied after presentation so it does not add another wait
-before vsync. Visible playback targets 60 FPS, or 30 FPS when unfocused. A
-minimized window updates at 5 FPS and skips FFT requests.
-The background blur is cached and limited to 1280 pixels wide by default.
-It is rebuilt less often during a resize to keep the window responsive.
-Startup window dimensions in the config apply next time you launch the app.
-`conf.lua` disables unused LÖVE audio, physics, and other modules; mpv handles sound.
-
-If audio monitoring is unavailable, music still plays and an FFT message appears.
-After fixing the audio connection, press F5 to reconnect the visualizer.
-
-## Run the terminal player
-
-Open a terminal in the project folder and run:
+If you use a Python virtual environment:
 
 ```bash
-python music_call_just_yt_dlp.py
+MUSIC_PYTHON=/path/to/.venv/bin/python ./music-player
 ```
 
-Type a song name and press Enter. Choose a result by entering its number.
-You can type another song name while music is playing.
+Press **S**, type a song name, and press **Enter**. Click a result to play it,
+or choose one with **Up/Down** and **Enter**. Use the mouse wheel to scroll.
+You can search again while the current song plays.
 
-| Key | What it does |
+| Key | Action |
 | --- | --- |
-| Space at an empty prompt | Pause or resume |
-| Right arrow | Forward 10 seconds |
-| Left arrow | Backward 10 seconds |
-| Ctrl+L | Show the cover again |
-| Ctrl+X | Stop the song |
-| Ctrl+Q | Quit |
+| S | Open search |
+| Space | Pause or resume |
+| Left / Right | Back or forward 10 seconds |
+| Escape | Close the search panel |
+| F5 | Reload visualizer and background settings |
+| Q | Quit |
 
-## Python functions
+The playback buttons at the bottom work with the mouse too. Closing the window
+stops the music and its background processes.
 
-The `python_code_music` folder only contains reusable functions:
+## Change the visualizer
 
-- `search.py` — search for songs
-- `playback.py` — play/stop music and sample colors from mpv video frames
-- `controls.py` — pause, resume, seek, and get playback status
-- `thumbnails.py` — get a cover URL or image bytes in memory
-- `spectrum.py` — monitor mpv's audio and return the newest in-memory PCM samples
-- `__init__.py` — make the functions available to import
+Edit `config.lua`, save it, and press **F5** in the player. You can change the
+number of bars, their size and spacing, opacity, smoothing, frequency range,
+and the background's blur and brightness.
 
-Use `create_player()` once, pass that player to the control functions, and
-call `stop_song(player)` when finished. The terminal interface is in
-`music_call_just_yt_dlp.py`, outside this folder.
+For random bar colors, use these settings inside `bars`:
 
-## Search from another app
-
-You can run the same search from another language:
-
-```bash
-python music_call_just_yt_dlp.py --search "toca toca"
+```lua
+color_mode = "random",
+color_change_speed = 10,
+video_color_fps = 8,
 ```
 
-## Control music from another app
+`color_change_speed` is how many times per second each bar picks a new color.
+Try `2` for slower changes or `30` for faster ones. It doesn't change how fast
+the bars move with the music.
 
-Keep this Python process open:
+`video_color_fps` controls how often the player samples a small video frame for
+fresh colors. That setting applies the next time you select a song. The colors
+come from the actual video at the current playback position, so seeking can
+change the palette. The background uses the song's cover.
 
-```bash
-python music_call_just_yt_dlp.py --api
-```
+If you want to avoid decoding video, set `color_source = "thumbnail"`.
+`color_mode = "per_song"` keeps each bar's assigned color until the palette
+changes. Window dimensions apply after restarting the app.
 
-Send one JSON request per line through stdin and read replies from stdout.
-For example, search first, wait for the results, then play a result:
+On Linux, the FFT reads only mpv's audio through PipeWire/PulseAudio. If the bars
+stop working, check that `pactl` and `parec` are available. Music can still play
+without the visualizer; press F5 after fixing the audio connection.
 
+## Packaged versions
 
-Other commands are `resume`, `toggle`, `backward`, `seek`, `status`, `results`,
-`thumbnail`, `image`, and `stop`. `image` returns base64 image bytes in the background;
-`thumbnail` returns a URL. Both accept a result `index` or `video_id`.
-Result numbers start at 1. Replies include the request
-`id` and `ok: true` or `ok: false`. Match replies by `id`, since searches run
-in the background.
+The finished builds are kept locally in `dist/`. They aren't committed to this
+repository, so cloning it gives you the source, not the installers.
 
-For an FFT client, set `spectrum: true` on `play`, with optional `fft_size` and
-`sample_rate`. Request `spectrum` to read base64 mono `s16le` PCM, or use
-`spectrum_start` / `spectrum_stop` to control monitoring. Send the last `sequence`
-to avoid getting the same samples again. Samples and images are never saved.
+| Platform | File | Requirements |
+| --- | --- | --- |
+| Linux | `music-player-linux-x86_64.run` | CachyOS-compatible x86-64 Linux |
+| Windows | `music-player-windows-x64.exe` | Windows 10/11, 64-bit |
+| Android | `music-player-android.apk` | Android 8.0 or newer |
 
-For video colors, send `"video_colors": true` and optionally `"video_color_fps": 8`
-on `play`. Poll `video_palette` with your last `sequence`. It returns `available`,
-`sequence`, `video_id`, playback `position`, and `colors` as RGB triples in 0–1.
-Unchanged palettes omit `colors`; frames that are still loading return
-`available: false`. For example, after searching:
+These builds include their app dependencies. You still need internet access,
+working graphics drivers, and an audio output. Linux also uses your existing
+PipeWire/PulseAudio service.
 
-```json
-{"id": 2, "command": "play", "index": 1, "video_colors": true, "video_color_fps": 8}
-{"id": 3, "command": "video_palette", "sequence": -1}
-```
-
-Playback takes a moment to load. Use `status` to check when `ready` is true.
-Closing the input pipe or sending `quit` stops playback and exits Python.
-
-## Portable Linux executable
-
-The portable build includes LÖVE, Python, yt-dlp and its JavaScript support, mpv,
-PulseAudio client tools, and their shared libraries. You do not need to install
-those packages on the computer running it.
+For the Linux build:
 
 ```bash
 chmod +x dist/music-player-linux-x86_64.run
 ./dist/music-player-linux-x86_64.run
 ```
 
-Check the included runtimes without opening the window:
-
-```bash
-./dist/music-player-linux-x86_64.run --check
-```
-
-This is a single-file, self-extracting **Linux** executable, not a Windows `.exe`.
-It unpacks into a temporary directory, runs the player, then removes that directory
-on exit. Allow roughly 1 GB of free temporary space. Linux base utilities (`sh`,
-`tar`, gzip and coreutils), working graphics drivers, and a PipeWire/PulseAudio
-service still come from your operating system. Internet access is needed for YouTube.
-The build targets CachyOS-compatible x86-64 systems; other distributions and older
-systems have not been validated. It includes the current configuration at build time.
-
-To keep an unpacked copy and edit its configuration:
+Use `--check` to check its bundled runtimes. To keep an unpacked copy for editing:
 
 ```bash
 ./dist/music-player-linux-x86_64.run --extract "$HOME/music-player-portable"
-# Edit ~/music-player-portable/app/config.lua, then run:
 "$HOME/music-player-portable/AppRun"
 ```
 
-Bundled component versions and license notices
-are in `COMPONENTS.txt` and `licenses/` inside the extracted package. Redistribution
-must also meet each component's license requirements, including any required source
-availability; these notices alone do not fulfill every license obligation.
-
-## Portable Windows executable
-
-Copy `dist/music-player-windows-x64.exe` to a **Windows 10/11 x64** computer and
-open it. This single executable includes LÖVE, embedded Python, yt-dlp, mpv, Deno,
-and Windows audio capture support. You do not need to install those programs.
-It extracts to a temporary directory, runs without administrator rights, and
-removes that directory after the player closes. Allow about 600 MB of temporary
-space. It needs internet access, working graphics drivers, and an audio output.
-The executable is unsigned, so Windows may show a publisher/reputation prompt.
-
-Search, cover images, video colors, pause/resume, and seeking use the same window
-and controls as Linux. Windows uses native pipes for the Python connection and
-mpv controls. Closing the window also closes its backend process job, including
-child players. Linux continues using its existing socket and audio-monitor code.
-
-The Windows FFT uses WASAPI loopback through the bundled PyAudioWPatch extension.
-It measures the **output device's audio mix**, including sound from other apps;
-Linux still monitors only mpv's stream. If no loopback device is available, music
-continues playing and the FFT status explains the capture failure.
-
-The executable, Python API, GUI pipe connection, mpv controls and video-frame
-sampling were tested under Wine. Native Windows audio hardware and WASAPI capture
-still need verification on a real Windows machine.
-
-To unpack permanently for editing settings, run from PowerShell:
+On Windows, open the `.exe`. To unpack it from PowerShell:
 
 ```powershell
 .\music-player-windows-x64.exe --extract "$HOME\MusicPlayerPortable"
-# Edit MusicPlayerPortable\app\config.lua, then open:
 & "$HOME\MusicPlayerPortable\music-player-app.exe"
 ```
 
-Bundled component details and license notices are included in the extracted files.
+Edit `app/config.lua` inside either unpacked desktop version to change its
+settings. Without `--extract`, the desktop builds unpack temporarily and clean
+up when you close them. Allow about 1 GB of temporary space on Linux and 600 MB
+on Windows. The Windows executable is unsigned.
 
-## Android APK
+The Windows FFT reads the output device's audio mix, so sounds from other apps
+can affect the bars. Its startup, search, backend connection, and playback
+controls were tested under Wine. Audio capture still needs testing on real
+Windows hardware.
 
-Install `dist/music-player-android.apk` on **Android 8.0 or newer**. It is about
-4.6 MiB, works across Android CPU architectures, and includes its application
-libraries. No Python, mpv, Termux, or separate runtime installation is required.
-It is a test-signed personal build, not a Play Store release.
+### Android
 
-Type a song name and tap **Search**, then tap a result to play it. Searching runs
-in the background while music plays. The bottom buttons pause/resume and seek
-10 seconds. Selecting another result immediately stops the old track. Moving
-the app into the background pauses playback; this version does not include a
-background playback service.
+Install the APK, search for a song, and tap a result. The bottom buttons pause,
+resume, and seek 10 seconds. Open **Settings** to change the bar count, color
+speed, and video sampling rate. Playback pauses when the app goes into the
+background.
 
-The native Android port uses Media3 for playback and NewPipe Extractor for search
-and stream resolution. The desktop players continue using yt-dlp and mpv. Android
-PCM samples feed the FFT directly, without microphone or system-audio recording.
-The bars sample actual video frames for colors; cover images stay in memory.
-**Settings** changes the bar count, color-change speed, and video sampling rate.
-Android 12+ applies the blurred cover background; older versions use a muted cover.
+Android uses Media3 for playback and NewPipe Extractor for search and stream
+resolution. It doesn't need Python, mpv, or Termux. The FFT reads the player's
+own audio, without recording the microphone. Android 12+ blurs the cover
+background; older versions show a muted cover.
 
-Source files are under `android/src/main/`. Third-party license notices are included
-there and inside the APK. The APK passed compilation, release lint, signature
-verification, and package checks. The actual Android search/stream resolver was
-also tested against live YouTube and returned readable media bytes (HTTP 206).
-No Android phone or emulator was available, so on-device UI, playback and audio/FFT
-behavior still need testing. This is an initial Android port.
+The APK is a test-signed personal build. Compilation, signature checks, and a
+live search/stream test passed, but the UI, playback, and FFT still need testing
+on a phone. Android source is in `android/src/main/`.
 
-## Build cleanup
+## Terminal player
 
-At your request, the desktop build scripts, Windows self-extractor build sources,
-download caches, and temporary Android SDK/JDK/Gradle build environment were
-removed after producing the releases. The app source and finished files in `dist/`
-remain. Rebuilding a release will require recreating its build setup.
+On Linux:
+
+```bash
+python music_call_just_yt_dlp.py
+```
+
+Type a name, then enter a result number. You can type another search while a
+song is playing.
+
+| Key | Action |
+| --- | --- |
+| Space at an empty prompt | Pause or resume |
+| Left / Right | Back or forward 10 seconds |
+| Ctrl+L | Show the cover again |
+| Ctrl+X | Stop |
+| Ctrl+Q | Quit |
+
+Terminal covers are optional. Install `chafa` if you want them:
+
+```bash
+sudo pacman -S chafa
+```
+
+## Use it from Lua or another app
+
+For a single search that returns JSON:
+
+```bash
+python music_call_just_yt_dlp.py --search "toca toca"
+```
+
+For playback controls and repeated searches, keep the backend running:
+
+```bash
+python music_call_just_yt_dlp.py --api
+```
+
+Send one JSON object per line to stdin and read replies from stdout. For example,
+send a search and wait for its reply before selecting a result:
+
+```json
+{"id": 1, "command": "search", "query": "toca toca"}
+```
+
+Then play the first result:
+
+```json
+{"id": 2, "command": "play", "index": 1}
+```
+
+Other commands include `results`, `pause`, `resume`, `toggle`, `forward`,
+`backward`, `seek`, `status`, `thumbnail`, `image`, `stop`, and `quit`.
+Result numbers start at 1; you can also select a song by `video_id`.
+Use `status` to check when playback is ready.
+
+Replies contain the request's `id` and an `ok` value. Match replies by ID because
+searches and image loading run in the background. Errors go to stderr, keeping
+stdout available for JSON. Closing stdin or sending `quit` stops playback.
+
+For FFT data, add `"spectrum": true` to `play`, then request `spectrum`. It returns
+base64 mono `s16le` PCM with the sample rate, FFT size, and a sequence number.
+Send the last sequence number to avoid receiving the same samples again.
+`spectrum_start` and `spectrum_stop` control capture separately.
+
+For video colors, add `"video_colors": true` to `play` and request `video_palette`.
+Its reply includes RGB colors in the 0–1 range, the video ID, playback position,
+and sequence number. An unchanged sequence omits the colors; frames still
+loading return `available: false`.
+
+## Where the code lives
+
+- `main.lua` draws the desktop window and handles input.
+- `music_backend.lua` connects Lua to Python; `music_windows.lua` handles Windows pipes.
+- `spectrum.lua` calculates and draws the desktop FFT bars.
+- `config.lua` holds desktop appearance and visualizer settings.
+- `music_call_just_yt_dlp.py` runs the terminal player and JSON backend.
+- `python_code_music/` contains the search, playback, controls, image, and audio functions.
+- `android/src/main/` contains the Android app and its license notices.
+
+Build scripts and download caches were removed after making the packaged builds.
+The source is still here, but rebuilding them needs a new build setup. Bundled
+components keep their own licenses; notices are included with the packages.

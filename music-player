@@ -1,0 +1,22 @@
+#!/bin/sh
+# Start the player from any folder, including through a symbolic link.
+set -eu
+
+app_dir=$(dirname -- "$(readlink -f -- "$0")")
+python=${MUSIC_PYTHON:-python3}
+
+for program in love mpv "$python"; do
+    if ! command -v "$program" >/dev/null 2>&1; then
+        printf 'Missing program: %s\nInstall: sudo pacman -S love mpv python python-yt-dlp libpulse\n' "$program" >&2
+        exit 1
+    fi
+done
+
+if ! "$python" -c 'import yt_dlp' >/dev/null 2>&1; then
+    printf 'yt-dlp is missing from %s. Install python-yt-dlp or set MUSIC_PYTHON to your virtual environment Python.\n' "$python" >&2
+    exit 1
+fi
+
+export MUSIC_PYTHON="$python"
+export PYTHONDONTWRITEBYTECODE=1
+exec love "$app_dir" "$@"

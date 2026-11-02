@@ -8,7 +8,17 @@ import select
 import signal
 import sys
 import subprocess
-import termios
+import queue
+if os.name != "nt":
+    import termios
+else:
+    # The portable Windows package keeps its executable tools beside Python.
+    from pathlib import Path
+    tools = Path(__file__).resolve().parent.parent / "runtime" / "bin"
+    os.environ["PATH"] = str(tools) + os.pathsep + os.environ.get("PATH", "")
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 import threading
 
 from python_code_music import (
@@ -391,7 +401,7 @@ def run_terminal():
     print("Ctrl+X stops, Ctrl+L reloads the cover, Ctrl+Q quits.")
     print("Type another name directly to search. Spaces within names work normally.")
     try:
-        for signum in (signal.SIGTERM, signal.SIGHUP):
+        for signum in dict.fromkeys((signal.SIGTERM, getattr(signal, "SIGHUP", signal.SIGTERM))):
             handlers[signum] = signal.signal(signum, exit_on_signal)
         keyboard_loop(player, search)
     finally:
@@ -453,7 +463,7 @@ def handle_request(request, player, results):
             if type(sample_rate) is not int or sample_rate not in (11025, 22050, 44100, 48000):
                 raise ValueError("Invalid spectrum sample rate.")
         # Try PulseAudio/PipeWire's compatibility output, with normal mpv fallback.
-        play_song(player, song, audio_output="pulse," if spectrum else None,
+        play_song(player, song, audio_output="pulse," if spectrum and os.name != "nt" else None,
                   video_colors=request.get("video_colors", False),
                   video_color_fps=request.get("video_color_fps", 8))
         if spectrum:
@@ -560,8 +570,18 @@ def run_api():
     handlers = {}
     previous_mode = MACHINE_MODE
     MACHINE_MODE = True
+    incoming = None
+    if os.name == "nt":
+        incoming = queue.Queue(maxsize=32)
+        def read_requests():
+            while True:
+                data = os.read(sys.stdin.fileno(), 65536)
+                incoming.put(data)
+                if not data:
+                    return
+        threading.Thread(target=read_requests, daemon=True).start()
     try:
-        for signum in (signal.SIGTERM, signal.SIGHUP):
+        for signum in dict.fromkeys((signal.SIGTERM, getattr(signal, "SIGHUP", signal.SIGTERM))):
             handlers[signum] = signal.signal(signum, exit_on_signal)
         while True:
             image_result = images.get_result()
@@ -583,9 +603,15 @@ def run_api():
                     reply(pending_search, {"query": query, "results": [song_info(song) for song in songs]})
                 pending_search = None
             wait = .015 if pending_search is not None or pending_image is not None else .05
-            if not select.select([sys.stdin.fileno()], [], [], wait)[0]:
-                continue
-            data = os.read(sys.stdin.fileno(), 65536)
+            if incoming is not None:
+                try:
+                    data = incoming.get(timeout=wait)
+                except queue.Empty:
+                    continue
+            else:
+                if not select.select([sys.stdin.fileno()], [], [], wait)[0]:
+                    continue
+                data = os.read(sys.stdin.fileno(), 65536)
             if not data:
                 return 0
             buffer += data
@@ -667,6 +693,9 @@ def main():
         return 0
     if sys.argv[1:]:
         print("Unknown argument. Use --help.", file=sys.stderr)
+        return 2
+    if os.name == "nt":
+        print("On Windows, open music-player.exe to use the window player.", file=sys.stderr)
         return 2
     return run_terminal()
 

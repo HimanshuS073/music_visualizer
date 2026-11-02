@@ -3,6 +3,8 @@
 import json
 import os
 import signal
+import shutil
+import uuid
 import socket
 import subprocess
 import sys
@@ -11,9 +13,22 @@ import threading
 import time
 
 
+def process_options():
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
 def stop_process(process):
     """Stop a program and the helper programs it started."""
     if process is None:
+        return
+    if os.name == "nt":
+        if process.poll() is None:
+            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           creationflags=subprocess.CREATE_NO_WINDOW, timeout=10)
+            process.wait(timeout=5)
         return
     try:
         os.killpg(process.pid, signal.SIGTERM)
@@ -157,12 +172,17 @@ def play_song(player, song, audio_output=None, video_colors=False, video_color_f
     try:
         directory = tempfile.TemporaryDirectory(prefix="music-mpv-")
         player["directory"] = directory
-        player["socket_path"] = os.path.join(directory.name, "ipc")
+        player["socket_path"] = ('\\\\.\\pipe\\music-' + uuid.uuid4().hex) if os.name == "nt" else os.path.join(directory.name, "ipc")
         log_path = os.path.join(directory.name, "mpv.log")
         extractor = os.path.join(directory.name, "yt-dlp")
-        with open(extractor, "w", encoding="utf-8") as script:
-            script.write(f"#!{sys.executable}\nfrom yt_dlp import main\nmain()\n")
-        os.chmod(extractor, 0o700)
+        if os.name == "nt":
+            extractor = shutil.which("yt-dlp.exe")
+            if not extractor:
+                raise OSError("The Windows bundle is missing yt-dlp.exe.")
+        else:
+            with open(extractor, "w", encoding="utf-8") as script:
+                script.write(f"#!{sys.executable}\nfrom yt_dlp import main\nmain()\n")
+            os.chmod(extractor, 0o700)
         command = ["mpv", "--no-config", "--no-video", "--no-terminal",
              "--input-terminal=no", "--ytdl=yes", "--ytdl-format=bestaudio/best",
              f"--script-opts=ytdl_hook-ytdl_path={extractor}",
@@ -183,7 +203,7 @@ def play_song(player, song, audio_output=None, video_colors=False, video_color_f
             ]
         process = subprocess.Popen(
             command,
-            stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True,
+            stdin=subprocess.DEVNULL, stdout=log, stderr=log, **process_options(),
         )
         player["player"] = process
         player["song"] = dict(song)
@@ -228,6 +248,9 @@ def send_command(player, *command):
     process = player["player"]
     if process is None or process.poll() is not None:
         raise OSError("Select a song first.")
+    if os.name == "nt":
+        from .windows import pipe_command
+        return pipe_command(player["socket_path"], command)
     deadline = time.monotonic() + 1
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(1)

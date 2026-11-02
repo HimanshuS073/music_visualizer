@@ -1,7 +1,7 @@
-# Music Visualizer AI
+# Music Player
 
-A small music player with a LÖVE window and Python music functions. It uses
-yt-dlp to search YouTube and mpv to play songs.
+A simple music player for Linux, Windows, and Android. Search YouTube, choose a
+song, and listen with playback controls and an audio visualizer.
 
 Music, thumbnails, and sampled video frames are not saved to disk.
 
@@ -24,8 +24,14 @@ sudo pacman -S chafa
 Open a terminal in the project folder:
 
 ```bash
-love .
+./music-player
 ```
+
+`music-player` is an executable Linux launcher. It finds the project even when
+started from another directory or through a symbolic link. Keep it beside the
+other project files. It uses the installed LÖVE, Python, yt-dlp, mpv, and libpulse
+programs; it is not a self-contained Windows `.exe` or AppImage.
+You can still launch the window with `love .`.
 
 Press **S**, type a song name, and press **Enter**. Results appear in the same
 panel on the right. Click a result, or use **Up/Down** and **Enter**, to play it.
@@ -172,3 +178,109 @@ Unchanged palettes omit `colors`; frames that are still loading return
 
 Playback takes a moment to load. Use `status` to check when `ready` is true.
 Closing the input pipe or sending `quit` stops playback and exits Python.
+
+## Portable Linux executable
+
+The portable build includes LÖVE, Python, yt-dlp and its JavaScript support, mpv,
+PulseAudio client tools, and their shared libraries. You do not need to install
+those packages on the computer running it.
+
+```bash
+chmod +x dist/music-player-linux-x86_64.run
+./dist/music-player-linux-x86_64.run
+```
+
+Check the included runtimes without opening the window:
+
+```bash
+./dist/music-player-linux-x86_64.run --check
+```
+
+This is a single-file, self-extracting **Linux** executable, not a Windows `.exe`.
+It unpacks into a temporary directory, runs the player, then removes that directory
+on exit. Allow roughly 1 GB of free temporary space. Linux base utilities (`sh`,
+`tar`, gzip and coreutils), working graphics drivers, and a PipeWire/PulseAudio
+service still come from your operating system. Internet access is needed for YouTube.
+The build targets CachyOS-compatible x86-64 systems; other distributions and older
+systems have not been validated. It includes the current configuration at build time.
+
+To keep an unpacked copy and edit its configuration:
+
+```bash
+./dist/music-player-linux-x86_64.run --extract "$HOME/music-player-portable"
+# Edit ~/music-player-portable/app/config.lua, then run:
+"$HOME/music-player-portable/AppRun"
+```
+
+Bundled component versions and license notices
+are in `COMPONENTS.txt` and `licenses/` inside the extracted package. Redistribution
+must also meet each component's license requirements, including any required source
+availability; these notices alone do not fulfill every license obligation.
+
+## Portable Windows executable
+
+Copy `dist/music-player-windows-x64.exe` to a **Windows 10/11 x64** computer and
+open it. This single executable includes LÖVE, embedded Python, yt-dlp, mpv, Deno,
+and Windows audio capture support. You do not need to install those programs.
+It extracts to a temporary directory, runs without administrator rights, and
+removes that directory after the player closes. Allow about 600 MB of temporary
+space. It needs internet access, working graphics drivers, and an audio output.
+The executable is unsigned, so Windows may show a publisher/reputation prompt.
+
+Search, cover images, video colors, pause/resume, and seeking use the same window
+and controls as Linux. Windows uses native pipes for the Python connection and
+mpv controls. Closing the window also closes its backend process job, including
+child players. Linux continues using its existing socket and audio-monitor code.
+
+The Windows FFT uses WASAPI loopback through the bundled PyAudioWPatch extension.
+It measures the **output device's audio mix**, including sound from other apps;
+Linux still monitors only mpv's stream. If no loopback device is available, music
+continues playing and the FFT status explains the capture failure.
+
+The executable, Python API, GUI pipe connection, mpv controls and video-frame
+sampling were tested under Wine. Native Windows audio hardware and WASAPI capture
+still need verification on a real Windows machine.
+
+To unpack permanently for editing settings, run from PowerShell:
+
+```powershell
+.\music-player-windows-x64.exe --extract "$HOME\MusicPlayerPortable"
+# Edit MusicPlayerPortable\app\config.lua, then open:
+& "$HOME\MusicPlayerPortable\music-player-app.exe"
+```
+
+Bundled component details and license notices are included in the extracted files.
+
+## Android APK
+
+Install `dist/music-player-android.apk` on **Android 8.0 or newer**. It is about
+4.6 MiB, works across Android CPU architectures, and includes its application
+libraries. No Python, mpv, Termux, or separate runtime installation is required.
+It is a test-signed personal build, not a Play Store release.
+
+Type a song name and tap **Search**, then tap a result to play it. Searching runs
+in the background while music plays. The bottom buttons pause/resume and seek
+10 seconds. Selecting another result immediately stops the old track. Moving
+the app into the background pauses playback; this version does not include a
+background playback service.
+
+The native Android port uses Media3 for playback and NewPipe Extractor for search
+and stream resolution. The desktop players continue using yt-dlp and mpv. Android
+PCM samples feed the FFT directly, without microphone or system-audio recording.
+The bars sample actual video frames for colors; cover images stay in memory.
+**Settings** changes the bar count, color-change speed, and video sampling rate.
+Android 12+ applies the blurred cover background; older versions use a muted cover.
+
+Source files are under `android/src/main/`. Third-party license notices are included
+there and inside the APK. The APK passed compilation, release lint, signature
+verification, and package checks. The actual Android search/stream resolver was
+also tested against live YouTube and returned readable media bytes (HTTP 206).
+No Android phone or emulator was available, so on-device UI, playback and audio/FFT
+behavior still need testing. This is an initial Android port.
+
+## Build cleanup
+
+At your request, the desktop build scripts, Windows self-extractor build sources,
+download caches, and temporary Android SDK/JDK/Gradle build environment were
+removed after producing the releases. The app source and finished files in `dist/`
+remain. Rebuilding a release will require recreating its build setup.

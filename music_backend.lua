@@ -127,6 +127,10 @@ function backend.decode(text)
 end
 
 function backend.new(python, script)
+    if ffi.os == "Windows" then
+        return setmetatable({fd=true, windows=require("music_windows").new(python,script),
+                             next_id=0,input='',output='',buffer=ffi.new('char[16384]')},client)
+    end
     local sockets = ffi.new('int[2]')
     assert(ffi.C.socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0, 'Cannot create Python connection')
     local strings = {ffi.new('char[?]', #python + 1, python),
@@ -170,9 +174,11 @@ end
 function client:flush()
     -- Send now when possible; leave queued bytes alone if the socket is busy.
     while #self.output > 0 do
-        local sent = tonumber(ffi.C.send(self.fd, self.output, #self.output, NONBLOCKING + NO_SIGNAL))
+        local sent
+        if self.windows then sent=self.windows:write(self.output)
+        else sent=tonumber(ffi.C.send(self.fd,self.output,#self.output,NONBLOCKING+NO_SIGNAL)) end
         if sent < 0 then
-            if ffi.errno() == TRY_AGAIN then break end
+            if self.windows or ffi.errno() == TRY_AGAIN then break end
             self:close(); error('Python disconnected while sending')
         end
         if sent == 0 then break end
@@ -187,9 +193,11 @@ function client:poll()
     local buffer = self.buffer
     -- Limit each frame's work when a large thumbnail is arriving.
     for _ = 1, 32 do
-        local count = tonumber(ffi.C.recv(self.fd, buffer, 16384, NONBLOCKING))
+        local count
+        if self.windows then count=self.windows:read(buffer,16384)
+        else count=tonumber(ffi.C.recv(self.fd,buffer,16384,NONBLOCKING)) end
         if count < 0 then
-            if ffi.errno() == TRY_AGAIN then break end
+            if self.windows or ffi.errno() == TRY_AGAIN then break end
             self:close(); error('Cannot read Python reply')
         end
         if count == 0 then self:close(); error('Python process exited') end
@@ -207,6 +215,9 @@ end
 
 function client:close()
     if not self.fd then return end
+    if self.windows then
+        self.windows:close();self.windows=nil;self.fd=nil;return
+    end
     ffi.C.shutdown(self.fd, 1)
     ffi.C.close(self.fd)
     self.fd = nil

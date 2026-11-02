@@ -13,12 +13,12 @@ return {
         bottom_gap = 0,        -- Space between the bars and the controls.
         height = 500,
         min_height = 0,
-        radius = 1,
+        radius = 5,
         opacity = 0.5,
-        update_rate = 60,       -- Target audio readings per second.
-        fft_size = 2048,        -- 256, 512, 1024, 2048, or 4096 samples.
+        update_rate = 30,       -- Target audio readings per second.
+        fft_size = 1024,        -- 256, 512, 1024, 2048, or 4096 samples.
         sample_rate = 44100,
-        min_frequency = 40,
+        min_frequency = 100,
         max_frequency = 10000,
         min_db = -65,
         max_db = -8,
@@ -28,7 +28,7 @@ return {
         palette_size = 8,       -- Number of colors picked from the current frame.
         color_source = "video", -- "video" follows actual video frames; "thumbnail" uses the cover.
         video_color_fps = 8,    -- Small frame samples per second (1–30).
-        color_mode = "random", -- Shuffle on a timer; "per_song" changes only with the palette.
+        color_mode = "per_song", -- Shuffle on a timer; "per_song" changes only with the palette.
         color_change_speed = 10, -- Bar color changes per second (0.1–144). Lower is slower.
     },
     background = {

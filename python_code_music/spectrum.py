@@ -134,7 +134,11 @@ def start_spectrum(player, fft_size=1024, sample_rate=44100):
         'sample_rate': sample_rate,
     }
     player['spectrum'] = state
-    worker = threading.Thread(target=_capture_audio, args=(player, state, process.pid), daemon=True)
+    capture = _capture_audio
+    if os.name == 'nt':
+        from .windows import capture_audio
+        capture = capture_audio
+    worker = threading.Thread(target=capture, args=(player, state, process.pid), daemon=True)
     worker.start()
     state['worker'] = worker
     return {'available': False, 'sample_rate': sample_rate, 'fft_size': fft_size}

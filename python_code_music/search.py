@@ -6,7 +6,7 @@ import sys
 import threading
 import time
 
-from .playback import stop_process
+from .playback import stop_process, process_options
 
 
 def search_songs(query, cancelled=None):
@@ -23,7 +23,7 @@ def search_songs(query, cancelled=None):
              "--dump-single-json", "--no-warnings", "--socket-timeout", "15",
              "--retries", "2", f"ytsearch10:{query}"],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, start_new_session=True,
+            text=True, encoding="utf-8", **process_options(),
         )
         deadline = time.monotonic() + 45
         while True:

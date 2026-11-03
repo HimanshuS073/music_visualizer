@@ -48,6 +48,8 @@ MUSIC_PYTHON=/path/to/.venv/bin/python ./music-player
 Press **S**, type a song name, and press **Enter**. Click a result to play it,
 or choose one with **Up/Down** and **Enter**. Use the mouse wheel to scroll.
 You can search again while the current song plays.
+Each result has a small thumbnail that loads in the background. These previews
+stay in memory and are cleared when you search again; no image files are saved.
 
 | Key | Action |
 | --- | --- |
@@ -246,6 +248,24 @@ loading return `available: false`.
 Build scripts and download caches were removed after making the packaged builds.
 The source is still here, but rebuilding them needs a new build setup. Bundled
 components keep their own licenses; notices are included with the packages.
+
+## Contributing
+
+Contributions are welcome. This is a personal project, and there's still room to
+improve it. Bug fixes, ideas, documentation, and testing on Linux, Windows, or
+Android all help.
+
+Found a problem? [Open an issue](https://github.com/HimanshuS073/music_visualizer/issues)
+with your operating system, what happened, and the steps to reproduce it. Include
+any useful error messages, but leave out tokens and other private information.
+
+To make a change, fork the repository, create a branch, and open a pull request.
+Explain what you changed and how you tested it. For bigger changes, open an issue
+first so we can talk about the idea. Please keep the app lightweight and avoid
+adding dependencies unless they're needed.
+
+Contributions to the app's code and documentation use the project's
+GPL-3.0-or-later license. Keep existing copyright and third-party notices.
 
 ## License
 

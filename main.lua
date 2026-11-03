@@ -15,6 +15,8 @@ local panel_open = false
 local input_focused = false
 local input_text = ""
 local results = {}
+local result_images = {}
+local preview_request
 local selected_result = 1
 local first_result = 1
 local search_message = "Type a song name and press Enter."
@@ -117,6 +119,11 @@ local function submit_search()
     local name = input_text:match("^%s*(.-)%s*$")
     if name == "" then return end
     song_name = name
+    for _, image in pairs(result_images) do
+        if image then release(image) end
+    end
+    result_images = {}
+    preview_request = nil
     results = {}
     selected_result, first_result = 1, 1
     search_message = "Searching for “" .. name .. "”…"
@@ -206,6 +213,21 @@ local function receive(reply)
         selected_result, first_result = 1, 1
         search_message = #results == 0 and "No songs found. Try another name." or
                          tostring(#results) .. " results · click a song or use Up/Down and Enter"
+    elseif kind == "preview" then
+        if reply.id ~= preview_request then return end
+        preview_request = nil
+        if reply.ok and reply.image then
+            local ok, image = pcall(function()
+                local bytes = love.data.decode("string", "base64", reply.image)
+                local file = love.filesystem.newFileData(bytes, "preview.jpg")
+                local pixels = love.image.newImageData(file)
+                local picture = love.graphics.newImage(pixels)
+                pixels:release()
+                file:release()
+                return picture
+            end)
+            if ok then result_images[reply.video_id] = image end
+        end
     elseif kind == "play" then
         if reply.id ~= latest_play then return end
         player_message = reply.ok and "Loading audio…" or reply.error
@@ -324,6 +346,18 @@ function love.update(dt)
         end
     end
     status_timer = status_timer + dt
+    if panel_open and not preview_request then
+        -- Load visible rows first, one small image at a time, without delaying audio.
+        for offset = 0, #results - 1 do
+            local index = (first_result - 1 + offset) % #results + 1
+            local song = results[index]
+            if result_images[song.video_id] == nil then
+                result_images[song.video_id] = false
+                preview_request = request("preview", {video_id=song.video_id}, "preview")
+                break
+            end
+        end
+    end
     if selected_song and not status_request and status_timer >= 0.75 then
         status_timer = 0
         status_request = request("status", nil, "status")
@@ -516,14 +550,22 @@ function draw_input_box()
         love.graphics.setColor(0.63, 0.73, 0.77)
         love.graphics.setFont(fonts.small)
         love.graphics.print(string.format("%02d", index), p.x + 18, y + 12)
+        local image = result_images[song.video_id]
+        love.graphics.setColor(0.09, 0.12, 0.16)
+        love.graphics.rectangle("fill", p.x + 43, y + 9, 64, 40, 4)
+        if image then
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.draw(image, p.x + 43, y + 9, 0,
+                               64 / image:getWidth(), 40 / image:getHeight())
+        end
         love.graphics.setFont(fonts.body)
         love.graphics.setColor(0.91, 0.94, 0.96)
-        local _, lines = fonts.body:getWrap(song.title, p.width - 80)
-        love.graphics.print(lines[1] or song.title, p.x + 48, y + 8)
-        if lines[2] then love.graphics.print(fitted(lines[2], p.width - 80, fonts.body), p.x + 48, y + 25) end
+        local _, lines = fonts.body:getWrap(song.title, p.width - 148)
+        love.graphics.print(lines[1] or song.title, p.x + 116, y + 8)
+        if lines[2] then love.graphics.print(fitted(lines[2], p.width - 148, fonts.body), p.x + 116, y + 25) end
         love.graphics.setFont(fonts.small)
         love.graphics.setColor(0.59, 0.68, 0.73)
-        love.graphics.print(fitted(song.channel or "Unknown channel", p.width - 126, fonts.small), p.x + 48, y + 46)
+        love.graphics.print(fitted(song.channel or "Unknown channel", p.width - 194, fonts.small), p.x + 116, y + 46)
         love.graphics.printf(time_text(song.duration), p.x + p.width - 74, y + 46, 50, "right")
     end
 end
@@ -649,6 +691,10 @@ function love.run()
 end
 
 function love.quit()
+    for _, image in pairs(result_images) do
+        if image then release(image) end
+    end
+    result_images = {}
     if backend then backend:close(); backend = nil end
     release(cover_image); cover_image = nil
     release(background); background = nil

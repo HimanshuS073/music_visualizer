@@ -534,17 +534,19 @@ class ImageTask:
             self.cancelled.set()
             self.result = None
 
-    def start(self, song):
+    def start(self, song, high_resolution=True):
         self.stop()
         with self.lock:
             self.cancelled = threading.Event()
             cancelled = self.cancelled
-        threading.Thread(target=self.fetch, args=(song, cancelled), daemon=True).start()
+        threading.Thread(target=self.fetch, args=(song, cancelled, high_resolution), daemon=True).start()
 
-    def fetch(self, song, cancelled):
+    def fetch(self, song, cancelled, high_resolution=True):
         data, error = None, None
         try:
-            image = fetch_thumbnail(song, high_resolution=True)
+            if not high_resolution:
+                song = dict(song, thumbnail=f"https://i.ytimg.com/vi/{song['id']}/mqdefault.jpg")
+            image = fetch_thumbnail(song, high_resolution=high_resolution)
             if not cancelled.is_set():
                 data = base64.b64encode(image).decode("ascii")
         except (OSError, ValueError) as problem:
@@ -566,9 +568,11 @@ def run_api():
     player = create_player(on_message=show_message)
     search = SearchTask(raise_errors=True)
     images = ImageTask()
+    previews = ImageTask()
     results = []
     pending_search = None
     pending_image = None
+    pending_preview = None
     buffer = b""
     handlers = {}
     previous_mode = MACHINE_MODE
@@ -587,6 +591,12 @@ def run_api():
         for signum in dict.fromkeys((signal.SIGTERM, getattr(signal, "SIGHUP", signal.SIGTERM))):
             handlers[signum] = signal.signal(signum, exit_on_signal)
         while True:
+            preview_result = previews.get_result()
+            if preview_result is not None and pending_preview is not None:
+                video_id, image, error = preview_result
+                reply(pending_preview, {"video_id": video_id, "image": image,
+                                        "encoding": "base64"}, error=error)
+                pending_preview = None
             image_result = images.get_result()
             if image_result is not None and pending_image is not None:
                 video_id, image, error = image_result
@@ -605,7 +615,8 @@ def run_api():
                     results = songs
                     reply(pending_search, {"query": query, "results": [song_info(song) for song in songs]})
                 pending_search = None
-            wait = .015 if pending_search is not None or pending_image is not None else .05
+            wait = .015 if any(item is not None for item in
+                               (pending_search, pending_image, pending_preview)) else .05
             if incoming is not None:
                 try:
                     data = incoming.get(timeout=wait)
@@ -641,6 +652,12 @@ def run_api():
                         results = []
                         search.start(query.strip())
                         pending_search = request
+                    elif request.get("command") == "preview":
+                        song = selected_song(request, results)
+                        if pending_preview is not None:
+                            reply(pending_preview, error="Cancelled by a newer preview.")
+                        previews.start(song, high_resolution=False)
+                        pending_preview = request
                     elif request.get("command") == "image":
                         song = selected_song(request, results)
                         if pending_image is not None:
@@ -660,6 +677,7 @@ def run_api():
         return 1
     finally:
         images.stop()
+        previews.stop()
         search.stop()
         stop_song(player)
         MACHINE_MODE = previous_mode

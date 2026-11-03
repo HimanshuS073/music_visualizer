@@ -670,7 +670,13 @@ def run_api():
                             return 0
                 except (OSError, ValueError) as error:
                     reply(request, error=error)
-    except (KeyboardInterrupt, BrokenPipeError):
+    except KeyboardInterrupt:
+        return 0
+    except (BrokenPipeError, ConnectionResetError):
+        # The window can close while a reply is still buffered. Discard it so
+        # Python doesn't try to flush a dead pipe again during shutdown.
+        with open(os.devnull, "wb") as sink:
+            os.dup2(sink.fileno(), sys.stdout.fileno())
         return 0
     except (OSError, ValueError) as error:
         print(str(error), file=sys.stderr)

@@ -36,7 +36,7 @@ function methods:configure(config)
     self.settings = {
         enabled=config.enabled ~= false, count=count,
         width=number(config.width, 8, 1, 80), gap=number(config.gap, 4, 0, 40),
-        fill_width=config.fill_width ~= false, bottom_gap=number(config.bottom_gap, 16, 4, 60),
+        fill_width=config.fill_width ~= false, bottom_gap=number(config.bottom_gap, 16, 0, 60),
         height=number(config.height, 140, 20, 2000), min_height=number(config.min_height, 2, 0, 40),
         radius=number(config.radius, 2, 0, 40), opacity=number(config.opacity, .9, 0, 1),
         update_rate=number(config.update_rate, 60, 5, 60), fft_size=n, sample_rate=rate,

@@ -109,13 +109,24 @@ repository, so cloning it gives you the source, not the installers.
 
 | Platform | File | Requirements |
 | --- | --- | --- |
-| Linux | `music-player-linux-x86_64.run` | CachyOS-compatible x86-64 Linux |
+| Linux | `music-player-linux-x86_64.run` | x86-64 Linux with graphics and PipeWire/PulseAudio |
 | Windows | `music-player-windows-x64.exe` | Windows 10/11, 64-bit |
 | Android | `music-player-android.apk` | Android 8.0 or newer |
 
 These builds include their app dependencies. You still need internet access,
 working graphics drivers, and an audio output. Linux also uses your existing
 PipeWire/PulseAudio service.
+
+The Linux package was tested on CachyOS and in Ubuntu 24.04 and Debian 13
+Distrobox containers. Both containers passed bundled runtime checks, window
+startup, the JSON API, live search, thumbnails, playback, pause/resume, seeking,
+searching while a song plays, switching tracks, live FFT capture, and video colors.
+The package uses its bundled `libmujs` library instead of requiring a copy in
+`/usr/lib`.
+
+Distrobox shares the host's kernel, display, graphics devices, and audio service.
+These results don't replace testing on separate installations. Read
+[TEST_REPORT.md](TEST_REPORT.md) for the test coverage, measurements, and limits.
 
 For the Linux build:
 

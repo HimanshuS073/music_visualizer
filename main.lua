@@ -33,6 +33,7 @@ local video_palette_request, video_palette_timer = nil, 0
 local playback_running = false
 local background_dirty = false
 local last_background_update = 0
+local controls_offset = 0
 local RESULT_HEIGHT = 64
 local RESULTS_TOP = 128
 
@@ -46,12 +47,22 @@ local function release(object)
     if object then object:release() end
 end
 
+local function controls_hovered()
+    if not love.window.hasMouseFocus() then return false end
+    local x, y = love.mouse.getPosition()
+    local w, h = love.graphics.getDimensions()
+    -- Keep a little space above the buttons so they are easy to reveal.
+    return x >= 0 and x <= w and y >= h - 100 and y <= h
+end
+
 local function visualizer_layout()
     local w, h = love.graphics.getDimensions()
-    local baseline = h - 84 - visualizer.settings.bottom_gap
+    local baseline = h - controls_offset - visualizer.settings.bottom_gap
     local height = 0
     if selected_song and visualizer.settings.enabled then
-        height = math.min(visualizer.settings.height, math.max(32, baseline - 300))
+        -- Reserve room for controls in both states so only the position changes.
+        height = math.min(visualizer.settings.height,
+                          math.max(32, h - 84 - visualizer.settings.bottom_gap - 300))
     end
     return {x=24, width=w - 48, top=baseline - height, baseline=baseline, height=height}
 end
@@ -59,7 +70,8 @@ end
 local function panel_layout()
     local w = love.graphics.getWidth()
     local width = math.min(440, w - 32)
-    local bottom = visualizer_layout().top - 16
+    -- Keep search results still while the bars slide behind the panel.
+    local bottom = visualizer_layout().top - (84 - controls_offset) - 16
     return {x=w - width - 20, y=70, width=width, height=math.max(208, bottom - 70)}
 end
 
@@ -298,6 +310,10 @@ function love.load()
 end
 
 function love.update(dt)
+    local target = controls_hovered() and 84 or 0
+    -- Ease toward the new position without depending on the frame rate.
+    controls_offset = controls_offset + (target - controls_offset) * (1 - math.exp(-14 * dt))
+    if math.abs(target - controls_offset) < .05 then controls_offset = target end
     if backend and backend.fd then
         local ok, replies = pcall(backend.poll, backend)
         if ok then
@@ -397,11 +413,18 @@ local function inside(x, y, left, top, width, height)
     return x >= left and x <= left + width and y >= top and y <= top + height
 end
 
+local function song_name_hovered(width)
+    if controls_hovered() then return true end
+    if not love.window.hasMouseFocus() then return false end
+    local x, y = love.mouse.getPosition()
+    return inside(x, y, 20, 70, width + 16, 148)
+end
+
 function love.mousepressed(x, y, button)
     if button ~= 1 then return end
     local w, h = love.graphics.getDimensions()
     if inside(x, y, w - 130, 18, 110, 34) then open_input_box(); return end
-    if selected_song and y >= h - 66 and y <= h - 22 then
+    if selected_song and controls_hovered() and y >= h - 66 and y <= h - 22 then
         if inside(x, y, w / 2 - 116, h - 66, 66, 44) then request("backward", {seconds=10}); return end
         if inside(x, y, w / 2 - 42, h - 66, 84, 44) then request("toggle"); return end
         if inside(x, y, w / 2 + 50, h - 66, 66, 44) then request("forward", {seconds=10}); return end
@@ -520,6 +543,8 @@ local function draw_heading()
     love.graphics.print("MUSIC", 28, 20)
     button("Search · S", w - 130, 18, 110, 34)
 
+    if selected_song and not song_name_hovered(text_width) then return end
+
     love.graphics.setFont(fonts.title)
     love.graphics.setColor(0.94, 0.96, 0.98)
     local title = selected_song and selected_song.title or "Find a song you love"
@@ -552,6 +577,7 @@ local function draw_visualizer()
 end
 
 local function draw_controls()
+    if not controls_hovered() then return end
     local w, h = love.graphics.getDimensions()
     love.graphics.setColor(0.045, 0.06, 0.085, 0.96)
     love.graphics.rectangle("fill", 16, h - 84, w - 32, 70, 8)

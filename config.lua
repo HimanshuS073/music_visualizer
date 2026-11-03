@@ -13,7 +13,7 @@ return {
         width = 4,
         gap = 10,               -- Minimum spacing when fill_width is enabled.
         fill_width = true,      -- Spread the bars across the window.
-        bottom_gap = 0,        -- Space between the bars and the controls.
+        bottom_gap = 0,        -- Space below bars, above controls or the window edge.
         height = 500,
         min_height = 0,
         radius = 5,

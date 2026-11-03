@@ -58,6 +58,14 @@ You can search again while the current song plays.
 | F5 | Reload visualizer and background settings |
 | Q | Quit |
 
+Move the mouse to the bottom of the window to show the playback buttons and song
+name. They hide when you move away. You can also hover over the song's title area
+near the top to see its details. Keyboard shortcuts keep working while controls
+are hidden.
+The bars slide smoothly to the bottom while the controls are hidden and move
+above them when they appear, keeping the same height. The `bottom_gap` setting
+adds space below the bars in either position.
+
 The playback buttons at the bottom work with the mouse too. Closing the window
 stops the music and its background processes.
 

@@ -14,8 +14,13 @@ frames used for bar colors stay in memory too.
 
 A demo video hasn't been added yet.
 
-<!-- Paste your real YouTube link or GitHub-uploaded video URL here. Use a demo
-     recording and music that you have permission to publish. -->
+
+
+https://github.com/user-attachments/assets/10e519cb-7d65-467b-b470-79dcf37dc91c
+
+
+
+
 
 ## Run it on Linux
 

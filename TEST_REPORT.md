@@ -10,7 +10,8 @@ checks and 27 GUI/numerical checks. Five abrupt socket-disconnect regressions
 also passed in each container. Seven injected-failure checks passed separately.
 
 The Windows package passed seven smoke checks under Wine. That is not a native
-Windows playback or audio-capture certification. Android was not tested in this run.
+Windows playback or audio-capture certification. Android's later APK update is
+covered separately below; no Android device testing was available.
 
 ## Environment and method
 
@@ -150,3 +151,59 @@ The earlier cross-distribution mpv fix is also present: mpv uses the bundled
 - YouTube availability and extraction behavior can change independently of the app.
 - Build reproducibility and dependency licensing were not audited by these runtime
   tests. See [DISTRIBUTION.md](DISTRIBUTION.md) for the existing release limitations.
+
+## Android APK update verification
+
+The Android app was updated later on November 3, 2026. These checks are separate
+from the desktop test counts above.
+
+Changes:
+
+- Result thumbnails use a 2 MiB memory cache and separate image workers. Images
+  are not saved to disk. Image responses are limited to 4 MiB and decoded to a
+  bounded size before display.
+- Controls and the song title hide after three seconds of active playback. A tap
+  reveals them; the bars move over 240 ms without changing height. Controls stay
+  visible while paused or when screen-reader touch exploration is enabled.
+- Superseded search/stream/image jobs cancel their active HTTP calls, and stale
+  replies are ignored.
+- A stream resolved after the activity stops does not start playing in the
+  background. Existing pause-on-background and release-on-destroy behavior remain.
+- The visible video preview is smaller, leaving more room for results while still
+  providing decoded frames for the FFT palette.
+
+Build and package checks:
+
+- APK version 1.1, version code 2; package `local.music.visualizer`.
+- Minimum API 26 (Android 8); compile/target API 36 (Android 16).
+- OpenJDK 17, Gradle 8.13, Android Gradle plugin 8.13.0, build tools 36.0.0.
+- Media3 1.8.0, NewPipe Extractor v0.26.5 and OkHttp 4.12.0 retained.
+- `assembleRelease` and `lintRelease` passed: zero lint errors and 20 warnings.
+  Warnings concern existing translation/resource choices, dependency version
+  notices, backup metadata, and the missing custom application icon.
+- The APK retains the earlier public AOSP test certificate and has a higher
+  version code. It remains a personal test build, not a production-signed build.
+- APK ZIP integrity, alignment, and v2/v3 signature verification passed. The
+  certificate matches the previous APK. No native-library ABI dependency or
+  microphone/storage permission was added.
+
+Thirteen host-JVM checks passed using the actual compiled `MusicSearch` code:
+
+1. Cancelled search rejects before network access.
+2. Live search returns a non-empty result list bounded to 20 entries.
+3. Result metadata and preview/cover URLs are present.
+4. Live preview image bytes load.
+5. Live cover image bytes load.
+6. Cancelled stream resolution rejects before network access.
+7. A live media stream resolves.
+8. The stream returns HTTP 206 media data; only 1,024 bytes were read into memory.
+9. Cancelled image jobs reject.
+10. Oversized image responses are rejected.
+11. Image IO runs asynchronously.
+12. Cancelling a job aborts an active HTTP call within the two-second test bound.
+13. A fresh job still succeeds after cancellation.
+
+No Android device was connected (`adb devices` returned an empty list). UI layout,
+touch interactions, animations, Media3 decoding/audio output, FFT drawing, Android
+lifecycle behavior, and installation/update on a phone still need device testing.
+The host-JVM checks do not establish those behaviors. No emulator was used.

@@ -162,9 +162,16 @@ Windows hardware.
 ### Android
 
 Install the APK, search for a song, and tap a result. The bottom buttons pause,
-resume, and seek 10 seconds. Open **Settings** to change the bar count, color
+resume, and seek 10 seconds. Each result includes a small thumbnail loaded into
+memory. While music plays, the song title and controls hide after three seconds;
+tap the visualizer area to show them again. The bars slide down when controls
+hide and keep the same height. Paused playback and screen-reader touch exploration
+keep the controls visible.
+
+Open **Settings** to change the bar count, color
 speed, and video sampling rate. Playback pauses when the app goes into the
-background.
+background. A stream that finishes loading while the app is in the background
+stays paused. New searches and selections cancel their old network requests.
 
 Android uses Media3 for playback and NewPipe Extractor for search and stream
 resolution. It doesn't need Python, mpv, or Termux. The FFT reads the player's
@@ -173,7 +180,11 @@ background; older versions show a muted cover.
 
 The APK is a test-signed personal build. Compilation, signature checks, and a
 live search/stream test passed, but the UI, playback, and FFT still need testing
-on a phone. Android source is in `android/src/main/`.
+on a phone. The updated APK is version 1.1 (version code 2), supports Android 8.0+
+and targets Android 16/API 36. It uses the same certificate as the earlier APK.
+The Android source folder and APK are kept locally and excluded from this
+repository. Verification details are in
+[TEST_REPORT.md](TEST_REPORT.md).
 
 ## Terminal player
 
@@ -254,7 +265,7 @@ loading return `available: false`.
 - `config.lua` holds desktop appearance and visualizer settings.
 - `music_call_just_yt_dlp.py` runs the terminal player and JSON backend.
 - `python_code_music/` contains the search, playback, controls, image, and audio functions.
-- `android/src/main/` contains the Android app and its license notices.
+- `android/src/main/` is the local-only Android app folder; Git ignores it.
 
 Build scripts and download caches were removed after making the packaged builds.
 The source is still here, but rebuilding them needs a new build setup. Bundled

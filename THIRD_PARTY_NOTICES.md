@@ -8,11 +8,11 @@ our own code; it does not replace any dependency's license.
 
 | Component | License | Notice or source |
 | --- | --- | --- |
-| NewPipe Extractor v0.26.5 | GPL-3.0-or-later | [License](android/src/main/assets/licenses/NewPipe-GPL-3.0.txt), [source](https://github.com/TeamNewPipe/NewPipeExtractor/tree/v0.26.5) |
-| AndroidX Media3 1.8.0 | Apache-2.0 | [License](android/src/main/assets/licenses/Media3-Apache-2.0.txt), [source](https://github.com/androidx/media/tree/1.8.0) |
-| OkHttp 4.12.0 | Apache-2.0 | [License](android/src/main/assets/licenses/OkHttp-Apache-2.0.txt), [source](https://github.com/square/okhttp/tree/parent-4.12.0) |
-| Rhino 1.8.1 | MPL-2.0 and additional notices in its license file | [Notice](android/src/main/assets/licenses/Rhino-MPL-2.0.txt), [source](https://github.com/mozilla/rhino) |
-| jsoup 1.22.2 | MIT | [License](android/src/main/assets/licenses/Jsoup-MIT.txt), [source](https://github.com/jhy/jsoup) |
+| NewPipe Extractor v0.26.5 | GPL-3.0-or-later | [License](https://github.com/HimanshuS073/music_visualizer/blob/cb7316e2670567420ca92c17f6e000cb819468cd/android/src/main/assets/licenses/NewPipe-GPL-3.0.txt), [source](https://github.com/TeamNewPipe/NewPipeExtractor/tree/v0.26.5) |
+| AndroidX Media3 1.8.0 | Apache-2.0 | [License](https://github.com/HimanshuS073/music_visualizer/blob/cb7316e2670567420ca92c17f6e000cb819468cd/android/src/main/assets/licenses/Media3-Apache-2.0.txt), [source](https://github.com/androidx/media/tree/1.8.0) |
+| OkHttp 4.12.0 | Apache-2.0 | [License](https://github.com/HimanshuS073/music_visualizer/blob/cb7316e2670567420ca92c17f6e000cb819468cd/android/src/main/assets/licenses/OkHttp-Apache-2.0.txt), [source](https://github.com/square/okhttp/tree/parent-4.12.0) |
+| Rhino 1.8.1 | MPL-2.0 and additional notices in its license file | [Notice](https://github.com/HimanshuS073/music_visualizer/blob/cb7316e2670567420ca92c17f6e000cb819468cd/android/src/main/assets/licenses/Rhino-MPL-2.0.txt), [source](https://github.com/mozilla/rhino) |
+| jsoup 1.22.2 | MIT | [License](https://github.com/HimanshuS073/music_visualizer/blob/cb7316e2670567420ca92c17f6e000cb819468cd/android/src/main/assets/licenses/Jsoup-MIT.txt), [source](https://github.com/jhy/jsoup) |
 
 The Android build also includes transitive dependencies such as nanojson,
 protobuf-javalite, Okio, Kotlin's standard library, AndroidX libraries and

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Return thumbnail URLs or image bytes. Images are never saved or displayed here."""
 
 import urllib.error

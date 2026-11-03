@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package local.music.visualizer;
 
 import org.schabi.newpipe.extractor.NewPipe;

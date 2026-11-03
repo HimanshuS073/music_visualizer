@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+-- SPDX-License-Identifier: GPL-3.0-or-later
+
 -- Change these values, then press F5 in the player to reload them.
 return {
     window = {

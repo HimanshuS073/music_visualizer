@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Windows pipe controls and playback audio capture. Imported only on Windows."""
 import array
 import audioop

@@ -3,6 +3,8 @@ name = "music-visualizer-ai"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "licenses/**/*", "android/src/main/assets/licenses/*.txt"]
 authors = [
     { name = "Himanshu_Sharma", email = "himanshu.s6487@gmail.com" }
 ]

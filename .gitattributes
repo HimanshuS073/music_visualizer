@@ -1,0 +1,4 @@
+# Preserve upstream license notices, including their original whitespace.
+LICENSE -text -whitespace
+licenses/** -text -whitespace
+android/src/main/assets/licenses/** -text -whitespace

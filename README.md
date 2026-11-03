@@ -10,6 +10,13 @@ Both have a cover background and audio bars that follow the music.
 Songs stream without being saved as music files. Cover images and the video
 frames used for bar colors stay in memory too.
 
+## Demo video
+
+A demo video hasn't been added yet.
+
+<!-- Paste your real YouTube link or GitHub-uploaded video URL here. Use a demo
+     recording and music that you have permission to publish. -->
+
 ## Run it on Linux
 
 On CachyOS or Arch, install the dependencies:
@@ -226,3 +233,18 @@ loading return `available: false`.
 Build scripts and download caches were removed after making the packaged builds.
 The source is still here, but rebuilding them needs a new build setup. Bundled
 components keep their own licenses; notices are included with the packages.
+
+## License
+
+The app's own code and documentation use **GPL-3.0-or-later**. You can use,
+change, and share them under that license. Sharing covered versions also brings
+source-sharing and notice requirements. Read [LICENSE](LICENSE) and [NOTICE](NOTICE)
+for the terms and copyright notice.
+
+Dependencies keep their original licenses. Their notices and package inventories
+are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Before publishing
+binaries, read [DISTRIBUTION.md](DISTRIBUTION.md): the matching build setup and some
+release-specific license work still need to be restored or completed.
+
+These licenses cover software. They don't grant rights to YouTube music, video,
+or artwork, and they don't guarantee Play Store approval or protection from disputes.

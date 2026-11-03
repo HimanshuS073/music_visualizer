@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+-- SPDX-License-Identifier: GPL-3.0-or-later
+
 local utf8 = require("utf8")
 local music_backend = require("music_backend")
 local Spectrum = require("spectrum")

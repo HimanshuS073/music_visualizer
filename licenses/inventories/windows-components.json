@@ -1,0 +1,56 @@
+[
+  {
+    "kind": "certifi",
+    "name": "certifi-2026.10.23-py3-none-any.whl",
+    "url": "https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl",
+    "sha256": "e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1"
+  },
+  {
+    "kind": "deno",
+    "name": "deno-x86_64-pc-windows-msvc.zip",
+    "url": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip",
+    "sha256": "cba84b26e0df5ae7f74fc66b86a95b866872a86292ebd84fa1e959927edd93bf"
+  },
+  {
+    "kind": "love",
+    "name": "love-11.5-win64.zip",
+    "url": "https://github.com/love2d/love/releases/download/11.5/love-11.5-win64.zip",
+    "sha256": "ba6e56be2685e53c817749c4a5007f51137136fe5a3ab64920508babc2e74369"
+  },
+  {
+    "kind": "mpv",
+    "name": "mpv-x86_64-20261102-git-2137d21b2e.7z",
+    "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261102/mpv-x86_64-20261102-git-2137d21b2e.7z",
+    "sha256": "80ddf0f7fcee5a3ace454967eae22a63b06a5d02e304b5cdb0c1f87e47d90490"
+  },
+  {
+    "kind": "pyaudiowpatch",
+    "name": "pyaudiowpatch-0.2.12.9-cp312-cp312-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/4f/4a/b3040ab051c3d2ee6b123e67db7a3e980fbf8e71f9d3b822366e8b380eb2/pyaudiowpatch-0.2.12.9-cp312-cp312-win_amd64.whl",
+    "sha256": "963376e94f46c84e994eda4d25ffd62b712881ad5d611a4f4433bb5aa0bf7fa4"
+  },
+  {
+    "kind": "python",
+    "name": "python-3.12.10-embed-amd64.zip",
+    "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+    "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
+  },
+  {
+    "kind": "extractor",
+    "name": "yt-dlp.exe",
+    "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp.exe",
+    "sha256": "f5389d3698ecde4ef06f4e6b1ce0294fe9ac1396228c8990b8d3416d6d177a7d"
+  },
+  {
+    "kind": "yt_dlp",
+    "name": "yt_dlp-2026.10.26-py3-none-any.whl",
+    "url": "https://files.pythonhosted.org/packages/7f/3d/16ea7d5638cf585991f2c5705e8083688dde633d32d0871f2404e0f4d827/yt_dlp-2026.10.26-py3-none-any.whl",
+    "sha256": "a05c5b5d8562f7e8a62f5334348b406af4930d56d3a65f8021d14af0e22339ae"
+  },
+  {
+    "kind": "yt_dlp_ejs",
+    "name": "yt_dlp_ejs-0.8.0-py3-none-any.whl",
+    "url": "https://files.pythonhosted.org/packages/e3/bd/520769863744b669440a924271a6159ddd82ad5ae26b4ac4d4b69e9f8d44/yt_dlp_ejs-0.8.0-py3-none-any.whl",
+    "sha256": "79300e5fca7f937a1eeede11f0456862c1b41107ce1d726871e0207424f4bdb4"
+  }
+]

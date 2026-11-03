@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Simple music controls. Each function returns a message or playback data."""
 
 from .playback import send_command

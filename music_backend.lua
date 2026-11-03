@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+-- SPDX-License-Identifier: GPL-3.0-or-later
+
 -- Send JSON requests to Python and read replies without stopping the window.
 local ffi = require("ffi")
 local AF_UNIX, SOCK_STREAM = 1, 1

@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+-- SPDX-License-Identifier: GPL-3.0-or-later
+
 -- Windows anonymous pipes keep the Python backend off the UI thread.
 local ffi = require('ffi')
 ffi.cdef[[

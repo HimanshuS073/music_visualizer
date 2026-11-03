@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+-- SPDX-License-Identifier: GPL-3.0-or-later
+
 -- Turn audio samples into bar heights and use colors from the current video.
 local ffi = require("ffi")
 local spectrum = {}

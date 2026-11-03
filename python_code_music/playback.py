@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Playback functions. Pass the state from create_player() to each function."""
 
 import json

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Monitor only this player's output. PCM stays in memory; Lua performs the FFT."""
 
 import base64

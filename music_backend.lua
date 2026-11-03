@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
--- Send JSON requests to Python and read replies without stopping the window.
+-- JSON connection to the Python player.
 local ffi = require("ffi")
 local AF_UNIX, SOCK_STREAM = 1, 1
 local NONBLOCKING, NO_SIGNAL, TRY_AGAIN = 0x40, 0x4000, 11
@@ -36,7 +36,6 @@ local function utf8_char(n)
                        128 + math.floor(n / 64) % 64, 128 + n % 64)
 end
 
--- Python sends normal JSON. This reader handles strings, arrays and objects.
 function backend.decode(text)
     local position = 1
     local parse
@@ -175,7 +174,7 @@ function client:send(command, fields)
 end
 
 function client:flush()
-    -- Send now when possible; leave queued bytes alone if the socket is busy.
+    -- Keep unsent bytes for the next poll.
     while #self.output > 0 do
         local sent
         if self.windows then sent=self.windows:write(self.output)
@@ -194,7 +193,7 @@ function client:poll()
     self:flush()
     local replies = {}
     local buffer = self.buffer
-    -- Limit each frame's work when a large thumbnail is arriving.
+    -- A large image reply shouldn't hold up a frame.
     for _ = 1, 32 do
         local count
         if self.windows then count=self.windows:read(buffer,16384)

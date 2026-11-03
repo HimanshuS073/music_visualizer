@@ -1,14 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Return thumbnail URLs or image bytes. Images are never saved or displayed here."""
+"""Fetch cover images into memory."""
 
 import urllib.error
 import urllib.request
 
 
 def thumbnail_url(song):
-    """Return a cover URL so another app can draw the image itself."""
+    """Choose a thumbnail URL from the result."""
     url = song.get("thumbnail")
     if isinstance(url, str) and url.startswith(("https://", "http://")):
         return url
@@ -23,7 +23,7 @@ def thumbnail_url(song):
 
 
 def fetch_thumbnail(song, high_resolution=False):
-    """Return image bytes in memory. This does not print or save a file."""
+    """Fetch image bytes without saving a file."""
     urls = [thumbnail_url(song)]
     if high_resolution:
         urls = [f"https://i.ytimg.com/vi/{song['id']}/maxresdefault.jpg",
@@ -42,10 +42,9 @@ def fetch_thumbnail(song, high_resolution=False):
 
 
 def load_image(song):
-    """Return image bytes for the calling app to display."""
     return fetch_thumbnail(song)
 
 
 def show_image(song):
-    """Keep the previous name usable; return bytes without terminal output."""
+    """Older callers still use this name."""
     return fetch_thumbnail(song)

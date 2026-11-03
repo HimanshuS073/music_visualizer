@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Run the terminal player, or use --api to call music functions from another app."""
+"""Terminal player and JSON API."""
 
 import base64
 import codecs
@@ -15,7 +15,7 @@ import queue
 if os.name != "nt":
     import termios
 else:
-    # The portable Windows package keeps its executable tools beside Python.
+    # The Windows bundle keeps its tools beside Python.
     from pathlib import Path
     tools = Path(__file__).resolve().parent.parent / "runtime" / "bin"
     os.environ["PATH"] = str(tools) + os.pathsep + os.environ.get("PATH", "")
@@ -43,7 +43,6 @@ MACHINE_MODE = False
 
 
 def show_message(message, error=False):
-    """Print a message, then put back any search text the user was typing."""
     output = sys.stdout
     if error or MACHINE_MODE:
         output = sys.stderr
@@ -54,7 +53,6 @@ def show_message(message, error=False):
 
 
 def draw_cover(song, cancelled=None, display_lock=None):
-    """Load the selected song's thumbnail and draw it with Chafa."""
     if cancelled is None:
         cancelled = threading.Event()
     if display_lock is None:
@@ -63,7 +61,7 @@ def draw_cover(song, cancelled=None, display_lock=None):
         image_data = fetch_thumbnail(song)
         if cancelled.is_set():
             return
-        # Probing asks the terminal questions and can put its replies in our input.
+        # Disable probing so terminal replies don't end up in the search input.
         rendered = subprocess.run(
             ["chafa", "--format", "symbols", "--colors", "full",
              "--probe", "off", "--animate", "off", "--threads", "2",
@@ -101,7 +99,6 @@ class ThumbnailDisplay:
             self.cancelled.set()
             self.cancelled = threading.Event()
             cancelled = self.cancelled
-        # Ignore the old cover if the user picks another song before it loads.
         threading.Thread(
             target=draw_cover, args=(dict(song), cancelled, self.lock), daemon=True,
         ).start()
@@ -116,7 +113,7 @@ def load_song_image(player):
 
 
 class SearchTask:
-    """Search in a thread so playback keys keep working while results load."""
+    """Run searches without blocking playback controls."""
     def __init__(self, raise_errors=False):
         self.raise_errors = raise_errors
         self.error = None
@@ -164,12 +161,12 @@ class SearchTask:
 
 
 class Keyboard:
-    """Read keys without Enter, then restore the terminal when we finish."""
+    """Read terminal keys without waiting for Enter."""
     def __init__(self):
         self.fd = sys.stdin.fileno()
         self.previous = None
         self.pending = ""
-        # A letter can arrive in more than one byte, especially in song names.
+        # Song names can contain multi-byte characters.
         self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
         self.escape = None
 
@@ -177,11 +174,10 @@ class Keyboard:
         if sys.stdin.isatty():
             self.previous = termios.tcgetattr(self.fd)
             settings = termios.tcgetattr(self.fd)
-            # Read each key without Enter or automatic terminal echo.
             settings[3] &= ~(termios.ICANON | termios.ECHO)
             settings[6][termios.VMIN] = 1
             settings[6][termios.VTIME] = 0
-            # Let Ctrl+Q reach our loop instead of being used for flow control.
+            # Disable flow control so Ctrl+Q reaches the player.
             settings[0] &= ~(termios.IXON | termios.IXOFF)
             termios.tcsetattr(self.fd, termios.TCSANOW, settings)
 
@@ -200,7 +196,7 @@ class Keyboard:
         while self.pending:
             key = self.pending[0]
             self.pending = self.pending[1:]
-            # Terminal color replies and escape sequences are not user input.
+            # Ignore terminal replies and escape sequences.
             if self.escape == "start":
                 if key == "[" or key == "O":
                     self.escape = "csi"
@@ -235,7 +231,6 @@ class Keyboard:
 
 
 def control_key(player, key):
-    """Check the key and call the matching player function."""
     try:
         if key == " ":
             message = play_pause(player)
@@ -266,7 +261,6 @@ def display_results(query, results):
 
 
 class InterfaceState:
-    """Remember the input text and the latest list of songs."""
     def __init__(self):
         self.buffer = ""
         self.results = []
@@ -281,7 +275,6 @@ def redraw_prompt(state):
 
 
 def select_song(player, results, number):
-    """Turn a displayed result number into a song to play."""
     try:
         index = int(number) - 1
         if not 0 <= index < len(results):
@@ -294,7 +287,7 @@ def select_song(player, results, number):
 
 
 def handle_key(key, state, player, search):
-    """Handle one key. False means the user wants to quit."""
+    """Return False when the user quits."""
     if key in ("", "\x04", "\x11"):
         return False
     if key == "\x03":
@@ -317,7 +310,6 @@ def handle_key(key, state, player, search):
         if query.isdecimal() and state.results:
             select_song(player, state.results, query)
         else:
-            # Every song name starts a fresh search, even while music is playing.
             if query.lower().startswith("search "):
                 query = query[7:].strip()
             if query:
@@ -330,7 +322,6 @@ def handle_key(key, state, player, search):
 
 
 def keyboard_loop(player, search):
-    """Keep checking for new results and keys until the user quits."""
     state = InterfaceState()
     keyboard = Keyboard()
 
@@ -341,7 +332,6 @@ def keyboard_loop(player, search):
 
         while True:
             try:
-                # Show the results if the background search has finished.
                 completed_search = search.get_results()
                 if completed_search is not None:
                     query, results = completed_search
@@ -349,7 +339,6 @@ def keyboard_loop(player, search):
                     display_results(query, results)
                     redraw_prompt(state)
 
-                # No key yet? Go back and check the search again.
                 key = keyboard.read_key()
                 if key is None:
                     continue
@@ -419,7 +408,7 @@ def run_terminal():
 
 
 def song_info(song):
-    """Keep the fields another app needs to display a song."""
+    """Fields used by the JSON API."""
     duration = song.get("duration")
     if type(duration) not in (int, float):
         duration = None
@@ -450,7 +439,7 @@ def selected_song(request, results):
 
 
 def handle_request(request, player, results):
-    """Call the same functions used by the terminal and return plain data."""
+    """Handle one JSON command."""
     command = request.get("command")
     seconds = request.get("seconds", 10)
     if command in ("forward", "backward", "seek"):
@@ -465,7 +454,7 @@ def handle_request(request, player, results):
                 raise ValueError("Invalid FFT size.")
             if type(sample_rate) is not int or sample_rate not in (11025, 22050, 44100, 48000):
                 raise ValueError("Invalid spectrum sample rate.")
-        # Try PulseAudio/PipeWire's compatibility output, with normal mpv fallback.
+        # Use PulseAudio for capture, with mpv's usual output as a fallback.
         play_song(player, song, audio_output="pulse," if spectrum and os.name != "nt" else None,
                   video_colors=request.get("video_colors", False),
                   video_color_fps=request.get("video_color_fps", 8))
@@ -523,7 +512,7 @@ def reply(request, data=None, error=None):
 
 
 class ImageTask:
-    """Fetch a cover without blocking search or playback requests."""
+    """Load covers in the background."""
     def __init__(self):
         self.lock = threading.Lock()
         self.cancelled = threading.Event()
@@ -563,7 +552,7 @@ class ImageTask:
 
 
 def run_api():
-    """Read newline-separated JSON requests until the caller quits or closes stdin."""
+    """Read JSON requests until stdin closes or the caller quits."""
     global MACHINE_MODE
     player = create_player(on_message=show_message)
     search = SearchTask(raise_errors=True)
@@ -673,8 +662,7 @@ def run_api():
     except KeyboardInterrupt:
         return 0
     except (BrokenPipeError, ConnectionResetError):
-        # The window can close while a reply is still buffered. Discard it so
-        # Python doesn't try to flush a dead pipe again during shutdown.
+        # Discard pending output so Python won't flush the closed pipe again.
         with open(os.devnull, "wb") as sink:
             os.dup2(sink.fileno(), sys.stdout.fileno())
         return 0
@@ -692,7 +680,7 @@ def run_api():
 
 
 def run_search(query):
-    """Take one song name from any language and return one JSON result."""
+    """Run one search and return a JSON reply."""
     request = {"id": None}
     query = query.strip()
     if not query:

@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
--- Turn audio samples into bar heights and use colors from the current video.
+-- FFT bars with colors from the video.
 local ffi = require("ffi")
 local spectrum = {}
 local methods = {}
@@ -61,7 +61,7 @@ function methods:configure(config)
     self.targets, self.heights = ffi.new('double[?]', count), ffi.new('double[?]', count)
     self.velocities = ffi.new('double[?]', count)
     self.low_bins, self.high_bins = {}, {}
-    -- Cache the window, sample order and angles; they stay the same during a song.
+    -- These FFT values only change when the settings change.
     for i = 0, n - 1 do
         local bits, reversed, value = n, 0, i
         while bits > 1 do
@@ -105,7 +105,6 @@ function methods:transform(samples)
         self.real[target] = samples[i] / 32768 * self.window[i]
         self.imag[target] = 0
     end
-    -- Combine pairs of samples, then groups of four, eight, and so on.
     local length = 2
     while length <= n do
         local half, stride = length / 2, n / length
@@ -151,7 +150,7 @@ end
 function methods:update(dt, playing)
     self.age = self.age + dt
     local s = self.settings
-    -- Keep each bar's velocity so new readings do not make its movement jump.
+    -- Keep each bar's velocity between readings to avoid sudden jumps.
     local step = math.min(dt, .1)
     local rise_speed, fall_speed = s.attack * 2, s.release * 2
     local rise_decay = math.exp(-rise_speed * step)
@@ -176,7 +175,7 @@ function methods:update(dt, playing)
         local interval = 1 / s.color_change_speed
         self.color_timer = self.color_timer + dt
         if self.color_timer + 1e-9 >= interval then
-            -- Skip missed changes after a slow frame instead of catching up in a loop.
+            -- Don't replay missed color changes after a slow frame.
             self.color_timer = math.max(0, self.color_timer - math.floor((self.color_timer + 1e-9) / interval) * interval)
             self:randomize_colors()
         end
@@ -184,7 +183,6 @@ function methods:update(dt, playing)
 end
 
 function methods:randomize_colors()
-    -- Reuse the sampled palette and existing color table. No image work per frame.
     local palette, seed = self.palette, self.seed
     local count = #palette
     for i = 0, self.settings.count - 1 do
@@ -201,7 +199,7 @@ end
 function methods:choose_colors(keep_colors)
     local palette = {}
     local used = {}
-    -- Pick different colors across the image, rather than eight similar shades.
+    -- Prefer colors that are farther apart in the palette.
     for _ = 1, math.min(#self.candidates, self.settings.palette_size) do
         local best, best_distance
         for index, color in ipairs(self.candidates) do
@@ -222,7 +220,7 @@ function methods:choose_colors(keep_colors)
     if #palette == 0 then palette = {{.38, .72, .69}, {.48, .65, .78}, {.67, .64, .77}} end
     self.palette = palette
     if keep_colors then return end
-    -- F5 calls configure(), so give every config reload a fresh shuffle too.
+    -- Shuffle again when F5 reloads the settings.
     local random = love and love.math and love.math.random or math.random
     self.seed = (self.seed + random(1, 2147483646)) % 2147483646 + 1
     local seed = self.seed
@@ -300,7 +298,7 @@ function methods:set_video_palette(reply)
     if unchanged then return end
     local keep_colors = #self.candidates > 0 and self.settings.color_mode == "random"
     self.candidates, self.frame_sequence = colors, reply.sequence
-    -- New video frames update the palette, but only the timer changes visible colors.
+    -- The timer decides when the new palette reaches the bars.
     self:choose_colors(keep_colors)
 end
 

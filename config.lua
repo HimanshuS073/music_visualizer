@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
--- Change these values, then press F5 in the player to reload them.
+-- Press F5 in the player after changing these settings.
 return {
     window = {
         width = 1080, height = 680,
@@ -11,32 +11,32 @@ return {
         enabled = true,
         count = 100,
         width = 4,
-        gap = 10,               -- Minimum spacing when fill_width is enabled.
-        fill_width = true,      -- Spread the bars across the window.
-        bottom_gap = 0,        -- Space below bars, above controls or the window edge.
+        gap = 10,              -- Minimum gap when fill_width is on.
+        fill_width = true,     -- Fit the bars across the window.
+        bottom_gap = 0,        -- Gap below the bars, in pixels.
         height = 500,
         min_height = 0,
         radius = 5,
         opacity = 0.5,
-        update_rate = 30,       -- Target audio readings per second.
-        fft_size = 1024,        -- 256, 512, 1024, 2048, or 4096 samples.
+        update_rate = 30,       -- Audio readings per second.
+        fft_size = 1024,        -- Samples: 256, 512, 1024, 2048 or 4096.
         sample_rate = 44100,
         min_frequency = 100,
         max_frequency = 10000,
         min_db = -65,
         max_db = -8,
         gain = 1,
-        attack = 40,            -- Higher values follow new sounds faster.
-        release = 5,          -- Higher values let bars fall faster.
-        palette_size = 8,       -- Number of colors picked from the current frame.
-        color_source = "video", -- "video" follows actual video frames; "thumbnail" uses the cover.
-        video_color_fps = 8,    -- Small frame samples per second (1–30).
-        color_mode = "per_song", -- Shuffle on a timer; "per_song" changes only with the palette.
-        color_change_speed = 10, -- Bar color changes per second (0.1–144). Lower is slower.
+        attack = 40,           -- Higher makes bars rise faster.
+        release = 5,           -- Higher makes bars fall faster.
+        palette_size = 8,      -- Colors to pick from each frame.
+        color_source = "video", -- "video" or "thumbnail".
+        video_color_fps = 8,   -- Video samples per second (1–30).
+        color_mode = "per_song", -- "random" uses the timer; "per_song" follows palette changes.
+        color_change_speed = 10, -- Changes per second in random mode (0.1–144).
     },
     background = {
         enabled = true,
-        max_width = 1280,      -- Limit the cached blur's size to save GPU memory.
+        max_width = 1280,      -- Smaller uses less GPU memory for the blur.
         blur_radius = 5,
         contrast = 0.4,
         saturation = 0.3,

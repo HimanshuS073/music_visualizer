@@ -53,7 +53,7 @@ local function controls_hovered()
     if not love.window.hasMouseFocus() then return false end
     local x, y = love.mouse.getPosition()
     local w, h = love.graphics.getDimensions()
-    -- Keep a little space above the buttons so they are easy to reveal.
+    -- Leave a small hover area above the buttons.
     return x >= 0 and x <= w and y >= h - 100 and y <= h
 end
 
@@ -62,7 +62,7 @@ local function visualizer_layout()
     local baseline = h - controls_offset - visualizer.settings.bottom_gap
     local height = 0
     if selected_song and visualizer.settings.enabled then
-        -- Reserve room for controls in both states so only the position changes.
+        -- Keep bar height the same with controls shown or hidden.
         height = math.min(visualizer.settings.height,
                           math.max(32, h - 84 - visualizer.settings.bottom_gap - 300))
     end
@@ -72,7 +72,7 @@ end
 local function panel_layout()
     local w = love.graphics.getWidth()
     local width = math.min(440, w - 32)
-    -- Keep search results still while the bars slide behind the panel.
+    -- Moving the bars shouldn't move the search results.
     local bottom = visualizer_layout().top - (84 - controls_offset) - 16
     return {x=w - width - 20, y=70, width=width, height=math.max(208, bottom - 70)}
 end
@@ -269,7 +269,7 @@ local function receive(reply)
     elseif kind == "status" then
         status_request = nil
         if not reply.ok then return end
-        -- A status reply queued before a new selection must not describe the old track.
+        -- Ignore status replies from the previous track.
         if not selected_song or not reply.song or reply.song.video_id ~= selected_song.video_id then return end
         paused = reply.paused or false
         playback_running = reply.running or false
@@ -333,7 +333,7 @@ end
 
 function love.update(dt)
     local target = controls_hovered() and 84 or 0
-    -- Ease toward the new position without depending on the frame rate.
+    -- Keep the slide speed consistent at different frame rates.
     controls_offset = controls_offset + (target - controls_offset) * (1 - math.exp(-14 * dt))
     if math.abs(target - controls_offset) < .05 then controls_offset = target end
     if backend and backend.fd then
@@ -347,7 +347,7 @@ function love.update(dt)
     end
     status_timer = status_timer + dt
     if panel_open and not preview_request then
-        -- Load visible rows first, one small image at a time, without delaying audio.
+        -- Load visible thumbnails first, one at a time.
         for offset = 0, #results - 1 do
             local index = (first_result - 1 + offset) % #results + 1
             local song = results[index]
@@ -368,7 +368,7 @@ function love.update(dt)
     if not love.window.hasFocus() then rate = math.min(rate, 30) end
     if selected_song and playback_running and not paused and visualizer.settings.enabled and not spectrum_request
        and love.graphics.isActive() and spectrum_timer >= 1 / rate then
-        -- Keep the fractional time so a 48 Hz reading rate can work at 60 FPS.
+        -- Carry leftover time into the next frame.
         spectrum_timer = math.min(spectrum_timer - 1 / rate, 1 / rate)
         spectrum_request = request("spectrum", {sequence=visualizer.sequence}, "spectrum")
     end
@@ -411,7 +411,7 @@ local function reload_config()
 end
 
 function love.keyreleased(key)
-    -- Open on release so the opening S is not inserted into the search field.
+    -- Don't type the opening S into the search box.
     if key == "s" and not input_focused then open_input_box() end
 end
 
@@ -486,7 +486,7 @@ end
 
 function love.resize()
     keep_selection_visible()
-    -- Reuse the cached image while dragging the window; rebuild after a short delay.
+    -- Wait briefly before rebuilding the background during a resize.
     background_dirty = true
 end
 
@@ -684,7 +684,7 @@ function love.run()
             love.graphics.present()
         end
 
-        -- Limit after presenting. Sleeping before vsync can skip a whole refresh.
+        -- Sleeping before vsync can skip a refresh.
         local remaining = 1 / frame_limit() - (love.timer.getTime() - started)
         if remaining > 0 then love.timer.sleep(remaining) end
     end

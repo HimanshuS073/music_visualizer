@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
--- Windows anonymous pipes keep the Python backend off the UI thread.
+-- Windows pipe connection to Python.
 local ffi = require('ffi')
 ffi.cdef[[
 typedef void * HANDLE;
@@ -48,7 +48,7 @@ local function wide(text)
     return result
 end
 local function quote(text)
-    -- Follow CreateProcess's backslash and quote rules, including trailing slashes.
+    -- Windows needs trailing backslashes escaped inside quotes.
     return '"'..text:gsub('(\\*)"',function(slashes)return slashes..slashes..'\\"'end):gsub('(\\+)$','%1%1')..'"'
 end
 local function close(handle)
@@ -78,7 +78,7 @@ function windows.new(python,script)
         startup.cb=ffi.sizeof(startup);startup.dwFlags=0x100
         startup.hStdInput=input_read[0];startup.hStdOutput=output_write[0];startup.hStdError=self.log
         local process=ffi.new('PROCESS_INFORMATION')
-        -- A job closes every descendant if the window disappears unexpectedly.
+        -- Close Python and its children if the window crashes.
         self.job=win.CreateJobObjectW(nil,nil)
         assert(self.job~=nil,'Cannot create backend job')
         local limits=ffi.new('unsigned char[144]')

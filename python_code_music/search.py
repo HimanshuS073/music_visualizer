@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Search functions. They return results or raise an error; they do not draw a UI."""
+"""Search YouTube with yt-dlp."""
 
 import json
 import subprocess
@@ -13,7 +13,7 @@ from .playback import stop_process, process_options
 
 
 def search_songs(query, cancelled=None):
-    """Ask yt-dlp for up to ten matching songs."""
+    """Return up to ten search results."""
     query = query.strip()
     if not query:
         return []

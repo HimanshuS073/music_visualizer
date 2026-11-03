@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Reusable music functions. No terminal UI or application loop runs here."""
+"""Music functions shared by the CLI and Lua frontend."""
 
 from .search import search_songs
 from .playback import create_player, play_song, stop_song, send_command, get_video_palette

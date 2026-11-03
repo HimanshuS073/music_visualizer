@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Monitor only this player's output. PCM stays in memory; Lua performs the FFT."""
+"""Capture this player's PCM for Lua's FFT."""
 
 import base64
 import json
@@ -91,7 +91,7 @@ def _capture_audio(player, state, process_id):
                 raise OSError('Audio monitoring stopped. Select the song again to reconnect.')
             samples.extend(data)
             if len(samples) >= size:
-                # Keep the newest complete window so old sound never queues up.
+                # Keep the latest audio window instead of queuing old samples.
                 end = len(samples) - len(samples) % 2
                 window = bytes(samples[end - size:end])
                 del samples[:end - size]

@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
--- mpv handles sound. These unused LÖVE modules do not need to start.
+-- mpv plays the audio, so these LÖVE modules can stay off.
 function love.conf(t)
     t.modules.audio = false
     t.modules.sound = false

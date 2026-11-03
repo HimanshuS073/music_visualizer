@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Playback functions. Pass the state from create_player() to each function."""
+"""mpv playback and process cleanup."""
 
 import json
 import os
@@ -23,7 +23,7 @@ def process_options():
 
 
 def stop_process(process):
-    """Stop a program and the helper programs it started."""
+    """Stop the process and its children."""
     if process is None:
         return
     if os.name == "nt":
@@ -48,12 +48,12 @@ def stop_process(process):
 
 
 def exit_on_signal(signum, _frame):
-    # Let the caller run its cleanup when the terminal or Lua process closes.
+    # Raising here lets the caller run its finally blocks.
     raise SystemExit(128 + signum)
 
 
 def read_playback_error(player_log, log_path):
-    """Read the useful error lines and leave long stream URLs out of the message."""
+    """Read mpv errors without exposing signed stream URLs."""
     player_log.seek(0)
     detail = player_log.read(8192).decode("utf-8", "replace").strip()
     if os.path.exists(log_path):
@@ -74,7 +74,7 @@ def read_playback_error(player_log, log_path):
 
 
 def create_player(on_message=None):
-    """Create state for one player. A message callback is optional."""
+    """State for one player and an optional status callback."""
     return {
         "player": None,
         "worker": None,
@@ -90,7 +90,7 @@ def create_player(on_message=None):
 
 
 def stop_song(player):
-    """Stop the current track and remove its temporary control files."""
+    """Stop playback and clean up temporary files."""
     player["cancelled"].set()
     stop_process(player["player"])
     if player.get("spectrum") is not None:
@@ -110,7 +110,7 @@ def stop_song(player):
 
 
 def write_video_sampler(directory, frame_rate):
-    """Have mpv sample its own decoded frames and publish only RGB colors."""
+    """Sample decoded video frames inside mpv."""
     path = os.path.join(directory, "video-colors.lua")
     script = r'''
 local mp = require('mp')
@@ -161,7 +161,7 @@ def get_video_palette(player, sequence=None):
 
 
 def play_song(player, song, audio_output=None, video_colors=False, video_color_fps=8):
-    """Start a stream in mpv. This does not draw a cover or read keyboard input."""
+    """Start streaming the selected song."""
     if not isinstance(song, dict):
         raise ValueError("Provide a song with a video id.")
     if not isinstance(song.get("id"), str) or not song["id"]:
@@ -227,7 +227,7 @@ def play_song(player, song, audio_output=None, video_colors=False, video_color_f
 
 
 def watch_song(player, process, cancelled, log, log_path):
-    """Collect playback errors in the background without printing them."""
+    """Collect errors from the running player."""
     try:
         process.wait()
         if cancelled.is_set():
@@ -247,7 +247,7 @@ def watch_song(player, process, cancelled, log, log_path):
 
 
 def send_command(player, *command):
-    """Send a playback command to mpv and return its reply data."""
+    """Send an mpv IPC command and return its data."""
     process = player["player"]
     if process is None or process.poll() is not None:
         raise OSError("Select a song first.")

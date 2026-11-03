@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Windows pipe controls and playback audio capture. Imported only on Windows."""
+"""Windows mpv pipes and WASAPI capture."""
 import array
 import audioop
 import ctypes
@@ -52,7 +52,7 @@ def pipe_command(path, command, timeout=2):
 
 
 def capture_audio(player, state, process_id):
-    """WASAPI loopback: Windows exposes the output device's mix, including other apps."""
+    """Capture the output mix, including sound from other apps."""
     audio = stream = None
     try:
         import pyaudiowpatch as pyaudio

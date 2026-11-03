@@ -9,8 +9,40 @@ wheels/
 # Virtual environments
 .venv
 .env
+.env.*
+!.env.example
+!.env.sample
+
+# Local credentials, signing material and machine configuration.
+/.aws/
+/.codex/
+/.agents/
+/secrets/
+/.secrets/
+*.key
+*.pk8
+*.keystore
+*.jks
+*.p12
+*.pfx
+cookies.txt
+*.cookies.txt
+
+# Generated caches, logs and editor leftovers.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.gradle/
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+local.properties
 
 # Keep Android source and packages local.
 /android/
 *.apk
 *.aab
+*.idsig

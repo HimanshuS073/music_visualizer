@@ -271,6 +271,12 @@ Build scripts and download caches were removed after making the packaged builds.
 The source is still here, but rebuilding them needs a new build setup. Bundled
 components keep their own licenses; notices are included with the packages.
 
+## Support the project
+
+If you enjoy this player, please [give the repository a star](https://github.com/HimanshuS073/music_visualizer)
+and [follow me on GitHub](https://github.com/HimanshuS073) for updates. Thanks for
+trying it out!
+
 ## Contributing
 
 Contributions are welcome. This is a personal project, and there's still room to

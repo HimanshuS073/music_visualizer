@@ -38,11 +38,6 @@ class MusicScreen(
     val controls = LinearLayout(activity)
     val cover = ImageView(activity)
     val video = TextureView(activity)
-    private val backdrop = VideoBackdrop(background)
-    var videoReady = false
-        private set
-    val videoBackgroundEnabled get() = backdrop.enabled
-    val wantsVideoFrame get() = videoReady && backdrop.needsFrame
     var visualizerHeightDp = 72
         private set
     val trackTitle = text("Nothing playing yet", 15, medium = true)
@@ -90,10 +85,6 @@ class MusicScreen(
         background.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(.25f) })
         if (Build.VERSION.SDK_INT >= 31)
             background.setRenderEffect(RenderEffect.createBlurEffect(24f, 24f, Shader.TileMode.CLAMP))
-        // One decoded video surface supplies both colors and the optional backdrop.
-        video.alpha = .01f
-        video.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        root.addView(video, FrameLayout.LayoutParams(dp(160), dp(90)))
         root.addView(background, FrameLayout.LayoutParams(-1, -1))
         root.addView(View(activity).apply {
             this.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
@@ -207,6 +198,10 @@ class MusicScreen(
         cover.setPadding(dp(12), dp(12), dp(12), dp(12))
         cover.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         artwork.addView(cover, FrameLayout.LayoutParams(-1, -1))
+        // This small surface only supplies colors for the visualizer.
+        video.alpha = .01f
+        video.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        artwork.addView(video, FrameLayout.LayoutParams(dp(24), dp(14), Gravity.BOTTOM or Gravity.END))
         track.addView(artwork, vertical(52, 52))
         val info = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
         trackTitle.maxLines = 2
@@ -366,23 +361,15 @@ class MusicScreen(
         fitPlayerHeight()
         positionControls(reveal)
     }
-    fun setVideoBackgroundEnabled(value: Boolean) { backdrop.setEnabled(value) }
-    fun markVideoReady() { videoReady = true }
-    fun resetVideoFrame() { videoReady = false; backdrop.resetFrame() }
-    fun showVideoFrame(frame: Bitmap) {
-        if (!videoReady) { frame.recycle(); return }
-        backdrop.showFrame(frame)
-    }
     fun setCover(bitmap: Bitmap?) {
         if (bitmap == null) {
-            resetVideoFrame()
             cover.setPadding(dp(12), dp(12), dp(12), dp(12))
             cover.setImageDrawable(RoomIconDrawable(RoomIcon.NOTE, RoomStyle.peach))
         } else {
             cover.setPadding(0, 0, 0, 0)
             cover.setImageBitmap(bitmap)
         }
-        backdrop.setCover(bitmap)
+        if (bitmap == null) background.setImageDrawable(null) else background.setImageBitmap(bitmap)
     }
     fun updateTimeline(position: Long, length: Long, seekable: Boolean) {
         seekBar.isEnabled = seekable && length > 0

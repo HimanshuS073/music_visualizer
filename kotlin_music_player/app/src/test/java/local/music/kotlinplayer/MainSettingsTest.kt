@@ -44,23 +44,20 @@ class MainSettingsTest {
         MainActivity::class.java.getDeclaredMethod("showSettings").apply { isAccessible = true }.invoke(activity)
         return ShadowAlertDialog.getLatestAlertDialog()
     }
-    @Test fun savesAndRestoresVideoBackgroundAndHeight() {
+    @Test fun savesAndRestoresHeightWithoutVideoBackgroundOption() {
         withWindow { activity ->
             val dialog = openSettings(activity)
             val views = children(dialog.window!!.decorView)
-            views.filterIsInstance<Switch>().single().isChecked = true
+            assertTrue(views.filterIsInstance<Switch>().isEmpty())
             views.filterIsInstance<EditText>().single { it.contentDescription.toString().startsWith("Visualizer height") }.setText("160")
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             assertFalse(dialog.isShowing)
             assertEquals(160, screen(activity).visualizerHeightDp)
-            assertTrue(screen(activity).videoBackgroundEnabled)
             val prefs = activity.getSharedPreferences("music", 0)
             assertEquals(160, prefs.getInt("visualizer_height", 0))
-            assertTrue(prefs.getBoolean("video_background", false))
         }
         withWindow { activity ->
             assertEquals(160, screen(activity).visualizerHeightDp)
-            assertTrue(screen(activity).videoBackgroundEnabled)
         }
     }
     @Test fun invalidHeightKeepsSettingsOpenWithoutSavingChanges() = withWindow { activity ->

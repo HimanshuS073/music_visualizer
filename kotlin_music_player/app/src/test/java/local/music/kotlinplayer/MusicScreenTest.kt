@@ -282,33 +282,23 @@ class MusicScreenTest {
             assertEquals(24, screen.spectrum.height)
         } finally { controller.destroy() }
     }
-    @Test fun videoBackgroundWaitsForRealFramesAndCanReturnToCover() {
+    @Test fun thumbnailBackgroundStaysWhilePlaybackControlsChange() {
         val controller = Robolectric.buildActivity(Activity::class.java).create()
         try {
             val screen = makeScreen(controller.get())
             fillResults(screen, controller.get())
-            screen.setResultsHidden(true)
-            screen.setVisualizerHeight(160)
             val still = (screen.background.drawable as android.graphics.drawable.BitmapDrawable).bitmap
-            screen.setVideoBackgroundEnabled(true)
-            assertFalse(screen.wantsVideoFrame)
-            val early = Bitmap.createBitmap(96, 54, Bitmap.Config.ARGB_8888)
-            screen.showVideoFrame(early)
-            assertTrue(early.isRecycled)
-            screen.markVideoReady()
-            assertTrue(screen.wantsVideoFrame)
-            val frame = Bitmap.createBitmap(96, 54, Bitmap.Config.ARGB_8888)
-            Canvas(frame).drawRect(0f, 0f, 96f, 54f, Paint().apply {
-                shader = LinearGradient(0f, 0f, 96f, 54f,
-                    intArrayOf(0xFFDA7462.toInt(), 0xFF6FADAA.toInt(), 0xFF9964B7.toInt()), null, Shader.TileMode.CLAMP)
-            })
-            screen.showVideoFrame(frame)
-            assertFalse(screen.wantsVideoFrame)
-            assertSame(frame, (screen.background.drawable as android.graphics.drawable.BitmapDrawable).bitmap)
+            screen.setPlaying(false)
+            screen.setVisualizerHeight(160)
+            screen.setResultsHidden(true)
+            screen.positionControls(0f)
             layout(screen)
-            screenshot(screen, "music-room-video-background")
-            screen.setVideoBackgroundEnabled(false)
             assertSame(still, (screen.background.drawable as android.graphics.drawable.BitmapDrawable).bitmap)
+            screen.setPlaying(true)
+            screen.positionControls(1f)
+            assertSame(still, (screen.background.drawable as android.graphics.drawable.BitmapDrawable).bitmap)
+            screen.setCover(null)
+            assertNull(screen.background.drawable)
         } finally { controller.destroy() }
     }
     @Test fun rendersEmptyAndLargeTextStates() {

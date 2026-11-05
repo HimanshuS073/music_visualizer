@@ -111,7 +111,7 @@ repository, so cloning it gives you the source, not the installers.
 | --- | --- | --- |
 | Linux | `music-player-linux-x86_64.run` | x86-64 Linux with graphics and PipeWire/PulseAudio |
 | Windows | `music-player-windows-x64.exe` | Windows 10/11, 64-bit |
-| Android (Music Room) | `music-room-v6.apk` in the Android release | Android 8.0 or newer |
+| Android (Music Room) | `music-room-v7.apk` in the Android release | Android 8.0 or newer |
 
 These builds include their app dependencies. You still need internet access,
 working graphics drivers, and an audio output. Linux also uses your existing
@@ -161,7 +161,7 @@ Windows hardware.
 
 ### Android — Music Room
 
-Download the APK from [Music Room 1.5](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.5).
+Download the APK from [Music Room 1.6](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.6).
 It supports Android 8 and newer. Install it once over the earlier **Kotlin** app
 to get the updater. The older Java Android app is a separate application.
 
@@ -171,8 +171,6 @@ lock the screen. Pause/resume and seek controls are available in the window;
 Android's media notification also controls playback. Swiping Music Room out of
 Recents stops it. Controls hide smoothly while playing; tap the visualizer to
 show them. Settings change the bar height, count, color speed and video sampling rate.
-Enable **Video background** in Settings for softly blurred and dimmed live
-video; turn it off to return to the cover image.
 
 Music Room checks GitHub for new Android releases at startup. Accept the update
 prompt to download the APK, then approve Android's installation prompt. Android

@@ -1,25 +1,37 @@
-# Music Room 1.5 verification
+# Music Room 1.6 verification
 
 Checked on November 5, 2026.
 
-## Build and APK
+## Build
 
-- Version 1.5, code 6; app ID `local.music.kotlinplayer`; min API 26, target 36.
+- Version 1.6, code 7; `local.music.kotlinplayer`, minimum API 26, target API 36.
 - Gradle 8.13, AGP 8.13.2, Kotlin 2.3.0, JDK 17.
-- APK: `releases/music-room-v6.apk`, 7,983,287 bytes.
-- SHA-256: `278f725873ea014fe797b84abdfb48368c8377524e659ac32c9189864e027433`.
-- Original signing certificate matches earlier Kotlin releases. APK v2 signature,
-  ZIP integrity and 16 KiB alignment checks passed.
-- Lint: 0 errors, 29 warnings, 1 hint; no lint errors suppressed.
-- No new runtime dependencies or additional video player/stream.
+- APK: `releases/music-room-v7.apk`; 7,979,831 bytes.
+- SHA-256: `85682b4ddc8f641e4cd3f8a142019182a9ffda89a47176bbc8b132e789ac65f5`.
+- APK signature matches previous Kotlin installs. v2 signature, ZIP integrity
+  and 16 KiB ZIP alignment checks passed.
+- Lint: 0 errors, 28 warnings and 1 hint.
 
-Command from this folder with SDK/JDK configured:
+## Removal
+
+The video background setting, preference reads/writes, frame presentation,
+CPU blur helper, feature-specific tests and generated feature preview were
+removed. The APK DEX files were checked for the removed renderer class and
+preference identifier; neither remains. The old preference, if present in an
+existing install, is never read or used.
+
+Only the thumbnail is used for the background. The small video surface still
+supplies colors for the visualizer, as it did before the removed feature.
+Visualizer height, other settings, automatic result hiding, background music
+and GitHub updates remain available.
+
+## Tests
+
+Command:
 
 ```sh
 ./gradlew --no-daemon --console=plain :app:assembleDebug :app:lintDebug :app:testDebugUnitTest -PliveTests=true -PpreviewDir="$PWD/releases/previews"
 ```
-
-## Tests
 
 | Suite | Tests | Failures | Skipped |
 | --- | ---: | ---: | ---: |
@@ -31,56 +43,22 @@ Command from this folder with SDK/JDK configured:
 | PlaybackServiceTest | 4 | 0 | 0 |
 | ReleaseUpdatesTest | 10 | 0 | 0 |
 | UpdateInstallerTest | 7 | 0 | 0 |
-| VideoBackdropTest | 6 | 0 | 0 |
 
-All 57 tests passed. The opt-in live YouTube search, thumbnails and small stream
-range test also passed. Existing updater, APK validation, search cancellation,
-FFT, playback lifecycle and result-hiding tests still pass.
+All 51 tests passed, including live YouTube search/thumbnail/stream checks.
+Settings tests verify that the removed switch is absent while height still
+saves/restores and invalid input remains rejected. A native renderer test
+verifies that transport, height and result-panel changes do not replace the
+thumbnail background, and clearing the cover clears the background.
 
-New tests check:
-
-- Saving and restoring video-background and visualizer-height preferences.
-- Invalid height inputs leave the dialog open and do not save changes.
-- Larger/smaller bars, preserved desired height across rotation, screen-fit limits,
-  space for results and unchanged height when controls hide.
-- Blur on constant colors and high-contrast edges, bounded frame sizes, swapping
-  frames, dimming state and restoring the original cover when video is disabled.
-- Clearing stale frames on track changes, waiting for a rendered video frame,
-  and handling disabled background frames without retaining them.
-
-A Save-button test found asynchronous dialog-listener setup. The listener is now
-installed immediately after showing the dialog. Frame-clear tests prompted an
-explicit drawable clear when no cover/frame is available.
-
-## Rendering and behavior
-
-The existing decoder renders to one small TextureView behind the screen. It
-provides the original video colors for the bars and, when enabled, background
-frames. The background uses 96×54 frames at the saved 1–10 samples/second setting.
-A reusable two-pass box blur runs twice on these small frames. The displayed
-image is desaturated, dimmed and covered by the existing dark screen gradient.
-Frames stay in memory; no video, music or thumbnails are saved.
-
-Video background is off by default. Switching it off restores the cover without
-restarting audio. The cover remains until a real video frame is available.
-Visual updates stop when the activity stops; the playback service continues.
-
-Height accepts 24–320 density-independent pixels. The desired value is saved;
-actual drawing height is limited to available space on smaller screens. It
-stays unchanged between shown/hidden controller states in the same viewport.
-Settings use a scrollable form with field labels and validation.
-
-Native renderer previews with generated artwork/frame data are in
-`releases/previews/`, including `music-room-video-background.png` and
-`music-room-tall-bars.png`. They were visually inspected. They are not captures
-from a real phone or proof of hardware video decoding.
+The deleted feature's tests were removed, not disabled. Existing FFT, layout,
+result-hiding, lifecycle, network cancellation and update-validation checks pass.
 
 ## Limits
 
-Tests simulate API 28. Actual codec output, TextureView frame capture, GPU
-composition, keyboard/dialog placement and background lifecycle on physical
-Android 8–16 devices still need checking. No new phone test or CPU/RAM/battery
-benchmark was performed. Rendering is deliberately sampled, not full-rate video.
+Robolectric tests simulate API 28. Actual audio/video-color sampling, system UI,
+installer and lifecycle behavior on physical Android devices still need phone
+testing. No new CPU/RAM/battery benchmark was performed. Preview artwork is
+sample data, not a phone capture.
 
-Signing keys, APKs and previews remain Git-ignored. The unrelated screenshot in
-the project folder is preserved and excluded from the release source commit.
+Signing keys, APKs and previews remain Git-ignored. Historical release tags are
+unchanged; the current source and new APK contain the removal.

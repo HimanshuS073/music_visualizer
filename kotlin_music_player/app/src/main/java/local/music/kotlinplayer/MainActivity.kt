@@ -109,15 +109,11 @@ class MainActivity : Activity() {
             }
             screen.updateTimeline(player.currentPosition, player.duration, player.isCurrentMediaItemSeekable)
             val now = SystemClock.uptimeMillis()
-            if ((player.isPlaying || screen.wantsVideoFrame) && video.isAvailable && now - lastFrame >= 1000 / videoFps) {
+            if (player.isPlaying && video.isAvailable && now - lastFrame >= 1000 / videoFps) {
                 lastFrame = now
-                val backdrop = screen.videoBackgroundEnabled && screen.videoReady
-                video.getBitmap(if (backdrop) 96 else 64, if (backdrop) 54 else 36)?.let { frame ->
-                    spectrum.setPalette(IntArray(32) { i ->
-                        frame.getPixel((i % 8 * frame.width / 8 + frame.width / 16).coerceAtMost(frame.width - 1),
-                            (i / 8 * frame.height / 4 + frame.height / 8).coerceAtMost(frame.height - 1))
-                    })
-                    if (backdrop) screen.showVideoFrame(frame) else frame.recycle()
+                video.getBitmap(64, 36)?.let { frame ->
+                    spectrum.setPalette(IntArray(32) { i -> frame.getPixel(i % 8 * 8 + 4, i / 8 * 9 + 4) })
+                    frame.recycle()
                 }
             }
             ui.postDelayed(this, if (player.isPlaying) (1000 / videoFps).toLong() else 500L)
@@ -134,7 +130,6 @@ class MainActivity : Activity() {
         spectrum.colorSpeed = settings.getFloat("colorSpeed", 10f)
         videoFps = settings.getInt("videoFps", 8).coerceIn(1, 10)
         screen.setVisualizerHeight(settings.getInt("visualizer_height", 72))
-        screen.setVideoBackgroundEnabled(settings.getBoolean("video_background", false))
         bound = bindService(Intent(this, PlaybackService::class.java).setAction(PlaybackService.LOCAL_BIND),
             connection, BIND_AUTO_CREATE)
         if (!bound) message.text = "Could not connect to playback. Reopen the app."
@@ -162,9 +157,6 @@ class MainActivity : Activity() {
                     else -> message.text
                 }
             }
-            override fun onRenderedFirstFrame() {
-                screen.markVideoReady()
-            }
             override fun onPlayerError(error: PlaybackException) {
                 screen.setPlaying(false)
                 message.text = "Playback failed. Select the song again to refresh its stream."
@@ -177,7 +169,6 @@ class MainActivity : Activity() {
 
     private fun attachPlayback() {
         if (playback == null || !::player.isInitialized) return
-        screen.resetVideoFrame()
         player.setVideoTextureView(video)
         playback?.attachSpectrum(spectrum)
         spectrum.setPlaying(player.isPlaying)
@@ -373,15 +364,6 @@ class MainActivity : Activity() {
             setPadding(dp(24), dp(8), dp(24), dp(8))
             isFocusableInTouchMode = true
         }
-        val videoBackground = Switch(this).apply {
-            text = "Video background"
-            textSize = 16f
-            contentDescription = "Video background"
-            isChecked = screen.videoBackgroundEnabled
-            minimumHeight = dp(48)
-            form.addView(this, LinearLayout.LayoutParams(-1, -2))
-        }
-        form.addView(RoomStyle.label(this, "Live video, softly blurred and dimmed.", 12, RoomStyle.muted))
         fun field(text: String, value: String, decimal: Boolean = false): EditText {
             form.addView(label(text, 14))
             return EditText(this).apply {
@@ -395,7 +377,7 @@ class MainActivity : Activity() {
         val height = field("Visualizer height (24–320)", screen.visualizerHeightDp.toString())
         val count = field("Bar count (8–128)", spectrum.count.toString())
         val speed = field("Color changes per second (0.1–60)", spectrum.colorSpeed.toString(), true)
-        val frames = field("Video updates per second (1–10)", videoFps.toString())
+        val frames = field("Video color samples per second (1–10)", videoFps.toString())
         form.requestFocus()
         val scroll = ScrollView(this).apply { addView(form); isFillViewport = false }
         val dialog = AlertDialog.Builder(this).setTitle("Music Room settings").setView(scroll)
@@ -425,10 +407,8 @@ class MainActivity : Activity() {
             spectrum.colorSpeed = color!!
             videoFps = fps!!
             screen.setVisualizerHeight(tall!!)
-            screen.setVideoBackgroundEnabled(videoBackground.isChecked)
             settings.edit().putInt("bars", spectrum.count).putFloat("colorSpeed", spectrum.colorSpeed)
-                .putInt("videoFps", videoFps).putInt("visualizer_height", screen.visualizerHeightDp)
-                .putBoolean("video_background", screen.videoBackgroundEnabled).apply()
+                .putInt("videoFps", videoFps).putInt("visualizer_height", screen.visualizerHeightDp).apply()
             ui.removeCallbacks(update)
             ui.post(update)
             dialog.dismiss()

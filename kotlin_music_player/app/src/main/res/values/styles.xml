@@ -1,0 +1,20 @@
+<resources>
+    <style name="MusicRoom" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">#B7E0CC</item>
+        <item name="android:windowBackground">#131117</item>
+        <item name="android:statusBarColor">#131117</item>
+        <item name="android:navigationBarColor">#131117</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:textColorPrimary">#F7F2EB</item>
+        <item name="android:textColorSecondary">#A59DAE</item>
+        <item name="android:alertDialogTheme">@style/MusicRoom.Dialog</item>
+    </style>
+    <style name="MusicRoom.Dialog" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">#B7E0CC</item>
+        <item name="android:textColorPrimary">#F7F2EB</item>
+        <item name="android:textColorSecondary">#A59DAE</item>
+        <item name="android:windowBackground">@drawable/dialog_background</item>
+    </style>
+</resources>

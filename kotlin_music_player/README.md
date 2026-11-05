@@ -30,6 +30,34 @@ doesn't restart itself. A track also stops when it finishes, and Android may
 pause it for calls or another app's audio. Visualizer updates stop while the
 window is hidden. Android 12+ blurs the cover; older versions show the muted image.
 
+## Interface
+
+The interface uses native Android views with a warm dark background, mint
+controls and a consistent sans-serif font. Search results have rounded artwork,
+a selected-track highlight and duration labels. The compact player includes
+cover art, pause/resume, ten-second controls and a draggable timeline.
+
+The layout places search and playback beside each other in landscape. While
+the keyboard is open, the player panel moves out of the way so results have
+more space; audio continues. Controls still hide smoothly during playback.
+No UI framework, font pack or image assets were added.
+
+The UI source is split into small files:
+
+- `MusicScreen.kt` creates the screen and adapts it to the window/keyboard.
+- `RoomStyle.kt` defines colors, text, rounded surfaces and vector icons.
+- `SongRow.kt` draws a search-result card.
+- `MainActivity.kt` connects the views to searches and the playback service.
+
+To render local previews with test artwork and sample tracks:
+
+```sh
+./gradlew :app:testDebugUnitTest --tests '*MusicScreenTest' -PpreviewDir="$PWD/releases/previews"
+```
+
+The previews use Robolectric's native graphics renderer. They help inspect
+layout and text, but aren't screenshots from an Android device.
+
 ## Build
 
 Requirements: Android SDK platform 36, build tools 36.0.0, and a full JDK 17 or
@@ -52,7 +80,7 @@ Then run:
 ```
 
 The result is `app/build/outputs/apk/debug/app-debug.apk`. Local checked copies
-are kept in `releases/`; GitHub installers use names such as `music-room-v3.apk`.
+are kept in `releases/`; GitHub installers use names such as `music-room-v4.apk`.
 The number in the filename is Android's version code, not its display version.
 
 The application ID is `local.music.kotlinplayer`, so it can be installed beside
@@ -64,8 +92,8 @@ an installation signed with the original key.
 
 ## App updates
 
-Install Music Room 1.2 once from the
-[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.2).
+Install the latest Music Room APK from the
+[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.3).
 Earlier APKs don't contain the updater.
 
 On launch, Music Room checks public GitHub releases in the background. When a

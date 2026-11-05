@@ -1,83 +1,85 @@
-# Music Room 1.2 verification
+# Music Room 1.3 UI verification
 
 Checked on November 5, 2026.
 
-## Build and APK
+## Build
 
-- Gradle wrapper 8.13, Android Gradle plugin 8.13.2, Kotlin 2.3.0, JDK 17.
-- `:app:assembleDebug :app:lintDebug :app:testDebugUnitTest -PliveTests=true` passed.
-- Lint: 0 errors, 25 warnings, 1 hint. These concern localization,
-  available dependency/tool updates, backup metadata and optional Kotlin extensions.
-- APK: `releases/music-room-v3.apk`; 8,024,385 bytes.
-- App ID `local.music.kotlinplayer`; version 1.2, code 3, minimum API 26, target 36.
-- Original private debug signing key retained for in-place updates.
-- SHA-256: `5c92ce0037d6b352e7a202ed6a7cef0bcee8f68660639338481f1216dacc1ca1`.
-- Generated APKs, signing keys and machine settings are excluded from Git.
+- Version 1.3, version code 4; application ID `local.music.kotlinplayer`.
+- Minimum API 26, target API 36; existing signing key preserved.
+- APK: `releases/music-room-v4.apk`, 8,214,146 bytes.
+- SHA-256: `2ed6b936ae0f9b94ddfc6173803ce941b53a8d1819ee71df65c114b8894cf041`.
+- Gradle 8.13, AGP 8.13.2, Kotlin 2.3.0, JDK 17.
+- Lint: 0 errors, 29 warnings and 1 hint; no lint suppression added.
+  Remaining warnings concern localization, dependency/tool updates and backup metadata.
+- ZIP integrity, APK v2 signature and 16 KiB ZIP alignment checks passed.
+- Certificate matches the previous Kotlin release, allowing an in-place update.
+- No new runtime dependencies, bundled fonts, bitmap assets or native libraries.
+- Old duplicate local APKs were replaced with one current installer.
 
-## Automated checks
+Command from this folder with the SDK/JDK configured:
+
+```sh
+./gradlew --no-daemon --console=plain :app:assembleDebug :app:lintDebug :app:testDebugUnitTest -PliveTests=true -PpreviewDir="$PWD/releases/previews"
+```
+
+## Tests
 
 | Suite | Tests | Failures | Skipped |
 | --- | ---: | ---: | ---: |
 | FftTest | 7 | 0 | 0 |
 | LiveSearchTest | 1 | 0 | 0 |
+| MusicScreenTest | 7 | 0 | 0 |
 | MusicSearchTest | 8 | 0 | 0 |
 | PlaybackServiceTest | 3 | 0 | 0 |
 | ReleaseUpdatesTest | 10 | 0 | 0 |
 | UpdateInstallerTest | 7 | 0 | 0 |
 
-All 36 tests passed. The live search test fetched actual YouTube results,
-thumbnail bytes and a small range from a resolved stream into memory.
+All 43 tests passed, including actual YouTube search/thumbnail/stream requests.
+Playback lifecycle, updater and installer-validation suites still pass.
 
-Updater tests cover highest newer version selection, unchanged/older versions,
-ignoring desktop/draft/prerelease entries, invalid metadata, pinned download
-addresses, digest requirements, cached-file reuse, corrupted cache replacement,
-truncated/oversized downloads, HTTP errors and partial-file cleanup. Downloader
-tests use an in-process OkHttp interceptor; no test APK is installed.
+The seven new UI tests check search submission from the button and keyboard,
+pause/ten-second actions, accessible timeline adjustment, elapsed/duration
+formatting, unknown-duration handling, keeping controls inside the viewport,
+keyboard space, unchanged bar height during control hiding, and empty/large-text
+states. Native rendering uses simulated Android API 28.
 
-Installer tests cover matching app IDs and signing certificates, downgrade and
-version mismatches, minimum Android versions, the per-app install-permission
-intent and FileProvider content URIs with read-only access restricted to the
-update cache. Robolectric simulates API 28 for these Android-dependent checks.
+## Rendered previews
 
-Existing FFT, HTTP cancellation/size-limit and playback lifecycle checks pass.
-Stopping/destroying the window preserves the service player's media item/play
-intention; removing the task clears playback and stops the service. These tests
-do not decode real audio or enforce Android foreground-service policy.
+Previews in `releases/previews/` use the actual Android Views and Robolectric's
+native graphics renderer, with sample tracks and generated test artwork/bar
+levels. They are not phone screenshots or evidence of live audio visualization.
 
-## Update behavior
+- `music-room-393x852.png`: portrait with results and playback.
+- `music-room-320x640.png`: a smaller phone viewport.
+- `music-room-800x400.png`: landscape with results and player beside each other.
+- `music-room-empty.png`: first launch before a search.
+- `music-room-large-text.png`: 1.5x text rendering.
 
-Checks run separately from playback. The user accepts an update before its APK
-is downloaded. Downloaded bytes must match GitHub's size and SHA-256 digest.
-The APK's package, higher version code, signing certificate and Android minimum
-are checked before Android's installer is opened. Pending install permission
-state is saved across normal activity recreation. Android still requires user
-installation approval. Cancelling a download or closing the window cancels its
-update request without stopping background music.
+These renders were visually inspected. Tests force complete measure/layout
+passes because they render the view hierarchy directly rather than running a
+real Android window manager. An initial test-only empty-adapter setup and layout
+measurement issue were corrected. The previews also exposed the visualizer
+being covered by the card; placement now belongs to the screen component and
+bars render above the controls. Lint found an API-27 theme attribute in the
+API-26 base theme; it was removed, keeping Android 8.0 support.
 
-The original Java Android app and desktop binaries were not changed. Kotlin
-source is now public; only the APK is attached as a release asset. No private
-signing material or credentials are included in Git.
+## What changed
 
-## Public release verification
+Rounded result cards and artwork, consistent sans-serif text, warm dark colors,
+mint transport buttons, empty/search states and a compact artwork player replace
+the plain system widgets. The player includes a draggable timeline. Landscape
+uses two columns; keyboard insets free room for search. Native vector drawing
+supplies icons without an icon/font library. Time labels update once per second.
+The existing audio service, stream/search backend and GitHub update rules remain.
 
-The release helper published `android-v1.2` after comparing GitHub's uploaded
-asset size and digest with the local APK. It also verified the signing
-certificate and ZIP alignment. A draft-tag lookup issue was fixed by retrieving
-the release by ID; interrupted draft uploads can now be resumed.
+Source is split into `MusicScreen.kt`, `RoomStyle.kt`, `SongRow.kt` and the
+existing activity/backend files. Signing keys, previews and APKs remain ignored
+by Git. The unrelated screenshot supplied in the project folder was not changed.
 
-A temporary JVM harness then ran the app's actual compiled `ReleaseUpdates`
-code against the unauthenticated public GitHub API. It verified that installed
-code 2 discovers code 3, downloaded the published APK and checked its SHA-256,
-and verified that installed code 3 receives no update. This checks the live
-feed and downloader, not Android's installer UI. The temporary harness and its
-downloads were removed after verification.
+## Limits
 
-Release: https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.2
-
-## Device limits
-
-ADB found no connected phone. No emulator was used. Real-device installation,
-Android's unknown-source permission screen, update data preservation, background
-and screen-lock audio, rendering/FFT and Android 14–16 service enforcement still
-need phone testing. No battery, CPU or RAM benchmark was performed. The build
-and automated checks do not establish those device behaviors.
+ADB found no connected phone. Touch, real keyboard/insets and system-bar
+behavior, actual audio/video and FFT rendering still need device testing,
+especially on API 26 and Android 14–16. No CPU, RAM or battery benchmark was
+performed. Existing simulated background playback tests are not real-device
+playback tests. The checked artifact is prepared for the `android-v1.3` release.

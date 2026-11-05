@@ -111,7 +111,7 @@ repository, so cloning it gives you the source, not the installers.
 | --- | --- | --- |
 | Linux | `music-player-linux-x86_64.run` | x86-64 Linux with graphics and PipeWire/PulseAudio |
 | Windows | `music-player-windows-x64.exe` | Windows 10/11, 64-bit |
-| Android (Music Room) | `music-room-v3.apk` in the Android release | Android 8.0 or newer |
+| Android (Music Room) | `music-room-v4.apk` in the Android release | Android 8.0 or newer |
 
 These builds include their app dependencies. You still need internet access,
 working graphics drivers, and an audio output. Linux also uses your existing
@@ -161,7 +161,7 @@ Windows hardware.
 
 ### Android — Music Room
 
-Download the APK from [Music Room 1.2](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.2).
+Download the APK from [Music Room 1.3](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.3).
 It supports Android 8 and newer. Install it once over the earlier **Kotlin** app
 to get the updater. The older Java Android app is a separate application.
 

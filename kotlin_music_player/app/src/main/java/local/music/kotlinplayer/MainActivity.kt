@@ -14,18 +14,15 @@ import android.content.SharedPreferences
 import android.graphics.*
 import android.os.*
 import android.text.InputType
-import android.text.TextUtils
 import android.util.LruCache
 import android.view.*
 import android.view.accessibility.AccessibilityManager
-import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.*
 import androidx.media3.common.*
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import java.io.IOException
-import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.ThreadPoolExecutor
@@ -66,6 +63,8 @@ class MainActivity : Activity() {
             service.song?.let { song ->
                 playingUrl = song.url
                 trackTitle.text = song.title
+                screen.trackArtist.text = song.artist
+                screen.setTrackAvailable(true)
                 loadCover(song, ++playVersion)
                 adapter.notifyDataSetChanged()
             }
@@ -76,14 +75,12 @@ class MainActivity : Activity() {
             message.text = "Playback service stopped. Reopen the app to reconnect."
         }
     }
+    private lateinit var screen: MusicScreen
     private lateinit var spectrum: SpectrumView
     private lateinit var video: TextureView
-    private lateinit var background: ImageView
     private lateinit var query: EditText
     private lateinit var message: TextView
     private lateinit var trackTitle: TextView
-    private lateinit var clock: TextView
-    private lateinit var pause: Button
     private lateinit var adapter: ResultsAdapter
     private lateinit var updates: UpdateManager
     private lateinit var settings: SharedPreferences
@@ -96,18 +93,18 @@ class MainActivity : Activity() {
 
     private val hideControls = Runnable {
         val exploring = getSystemService(AccessibilityManager::class.java)?.isTouchExplorationEnabled == true
-        if (!closed && active && ::player.isInitialized && player.isPlaying && !exploring) animateControls(false)
+        if (!closed && active && ::player.isInitialized && player.isPlaying && !exploring && !screen.seeking) animateControls(false)
     }
     private val update = object : Runnable {
         override fun run() {
             if (closed || !active) return
             if (!::player.isInitialized || playback == null) { ui.postDelayed(this, 100); return }
-            pause.text = if (playback?.desiredPlaying == true) "Pause" else "Play"
+            screen.setPlaying(playback?.desiredPlaying == true)
             if (!searching) {
                 playback?.errorMessage?.let { message.text = it }
                 if (playback?.loading == true) message.text = "Loading stream…"
             }
-            clock.text = "${time(player.currentPosition)} / ${time(player.duration)}"
+            screen.updateTimeline(player.currentPosition, player.duration, player.isCurrentMediaItemSeekable)
             val now = SystemClock.uptimeMillis()
             if (player.isPlaying && video.isAvailable && now - lastFrame >= 1000 / videoFps) {
                 lastFrame = now
@@ -138,12 +135,12 @@ class MainActivity : Activity() {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 spectrum.setPlaying(active && isPlaying)
-                pause.text = if (playback?.desiredPlaying == true) "Pause" else "Play"
+                screen.setPlaying(playback?.desiredPlaying == true)
                 showControls()
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) {
-                    pause.text = "Play"
+                    screen.setPlaying(false)
                     showControls()
                 }
                 if (searching) return
@@ -154,8 +151,11 @@ class MainActivity : Activity() {
                     else -> message.text
                 }
             }
+            override fun onRenderedFirstFrame() {
+                if (active) video.animate().alpha(.85f).setDuration(180).start()
+            }
             override fun onPlayerError(error: PlaybackException) {
-                pause.text = "Play"
+                screen.setPlaying(false)
                 message.text = "Playback failed. Select the song again to refresh its stream."
                 showControls()
             }
@@ -166,88 +166,30 @@ class MainActivity : Activity() {
 
     private fun attachPlayback() {
         if (playback == null || !::player.isInitialized) return
+        video.alpha = .01f
         player.setVideoTextureView(video)
         playback?.attachSpectrum(spectrum)
         spectrum.setPlaying(player.isPlaying)
-        pause.text = if (playback?.desiredPlaying == true) "Pause" else "Play"
+        screen.setPlaying(playback?.desiredPlaying == true)
         showControls()
     }
 
     private fun buildLayout() {
-        val root = FrameLayout(this)
-        root.setBackgroundColor(Color.rgb(13, 17, 24))
-        background = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            alpha = .28f
-            colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(.3f) })
-            if (Build.VERSION.SDK_INT >= 31)
-                setRenderEffect(RenderEffect.createBlurEffect(18f, 18f, Shader.TileMode.CLAMP))
-        }
-        root.addView(background, FrameLayout.LayoutParams(-1, -1))
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.setPadding(dp(18), dp(14), dp(18), dp(14))
-        root.addView(content, FrameLayout.LayoutParams(-1, -1))
-        root.setOnApplyWindowInsetsListener { _, insets ->
-            if (Build.VERSION.SDK_INT >= 30) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                content.setPadding(bars.left + dp(18), bars.top + dp(12), bars.right + dp(18), bars.bottom + dp(12))
-            } else {
-                @Suppress("DEPRECATION")
-                content.setPadding(insets.systemWindowInsetLeft + dp(18), insets.systemWindowInsetTop + dp(12),
-                    insets.systemWindowInsetRight + dp(18), insets.systemWindowInsetBottom + dp(12))
-            }
-            insets
-        }
-        val heading = LinearLayout(this)
-        heading.addView(label("MUSIC ROOM", 16).apply { setTextColor(Color.rgb(105, 205, 189)) },
-            LinearLayout.LayoutParams(0, dp(46), 1f))
-        video = TextureView(this)
-        heading.addView(video, LinearLayout.LayoutParams(dp(80), dp(46)))
-        heading.addView(button("Settings") { showSettings() })
-        content.addView(heading)
-        val searchBar = LinearLayout(this)
-        query = EditText(this).apply {
-            setSingleLine()
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
-            hint = "Find a song"
-            imeOptions = EditorInfo.IME_ACTION_SEARCH
-            setOnEditorActionListener { _, action, _ ->
-                if (action == EditorInfo.IME_ACTION_SEARCH) { search(); true } else false
-            }
-        }
-        searchBar.addView(query, LinearLayout.LayoutParams(0, dp(52), 1f))
-        searchBar.addView(button("Search") { search() })
-        content.addView(searchBar)
-        message = label("Search for music to start.", 12)
-        content.addView(message)
+        screen = MusicScreen(this, ::search, ::showSettings, ::togglePlayback, ::seek,
+            onScrub = { fraction ->
+                if (::player.isInitialized && player.duration > 0 && player.isCurrentMediaItemSeekable)
+                    player.seekTo((player.duration * fraction).toLong())
+            }, onInteraction = ::showControls)
+        spectrum = screen.spectrum
+        video = screen.video
+        query = screen.query
+        message = screen.message
+        trackTitle = screen.trackTitle
+        playbackArea = screen.playbackArea
+        controls = screen.controls
         adapter = ResultsAdapter()
-        val list = ListView(this).apply {
-            dividerHeight = 1
-            adapter = this@MainActivity.adapter
-            setOnItemClickListener { _, _, index, _ -> select(index) }
-        }
-        content.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
-        playbackArea = FrameLayout(this)
-        content.addView(playbackArea, LinearLayout.LayoutParams(-1, dp(220)))
-        spectrum = SpectrumView(this)
-        playbackArea.addView(spectrum, FrameLayout.LayoutParams(-1, dp(110), Gravity.BOTTOM))
-        controls = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.argb(225, 13, 17, 24))
-            setPadding(0, dp(6), 0, 0)
-        }
-        playbackArea.addView(controls, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
-        trackTitle = label("Nothing playing", 15).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
-        clock = label("0:00 / --:--", 12).apply { gravity = Gravity.CENTER }
-        controls.addView(trackTitle)
-        controls.addView(clock)
-        val buttons = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        buttons.addView(button("−10s") { seek(-10000) })
-        pause = button("Play") { togglePlayback() }
-        buttons.addView(pause)
-        buttons.addView(button("+10s") { seek(10000) })
-        controls.addView(buttons)
+        screen.list.adapter = adapter
+        screen.list.setOnItemClickListener { _, _, index, _ -> select(index) }
         playbackArea.contentDescription = "Show playback controls"
         playbackArea.setOnClickListener { showControls() }
         controls.setOnClickListener { showControls() }
@@ -256,21 +198,20 @@ class MainActivity : Activity() {
                 showControls()
             false
         }
-        controls.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            val wantedHeight = dp(110) + controls.height
-            if (playbackArea.layoutParams.height != wantedHeight)
-                playbackArea.layoutParams = playbackArea.layoutParams.apply { height = wantedHeight }
-            positionControls()
-        }
-        setContentView(root)
+        setContentView(screen.root)
     }
 
     private fun search() {
         val name = query.text.toString().trim()
-        if (name.isEmpty()) return
+        if (name.isEmpty()) {
+            message.text = "Type a song or artist to search."
+            query.requestFocus()
+            return
+        }
         hideKeyboard()
         val version = ++searchVersion
         searching = true
+        screen.showSearching(name)
         message.text = "Searching for “$name”…"
         searchJob.cancel()
         searchTask?.cancel(true)
@@ -290,6 +231,7 @@ class MainActivity : Activity() {
                     if (!closed && version == searchVersion) {
                         searching = false
                         songs.addAll(found)
+                        screen.showResults(found.size)
                         adapter.notifyDataSetChanged()
                         message.text = if (found.isEmpty()) "No songs found. Try another name." else "Tap a song to play."
                     }
@@ -297,6 +239,7 @@ class MainActivity : Activity() {
             } catch (error: Exception) {
                 ui.post { if (!closed && version == searchVersion) {
                     searching = false
+                    screen.showSearchError()
                     message.text = "Search failed: ${error.message}"
                 } }
             }
@@ -310,9 +253,12 @@ class MainActivity : Activity() {
         coverJob.cancel()
         service.select(song)
         spectrum.reset()
-        pause.text = "Pause"
+        screen.setPlaying(true)
         playingUrl = song.url
         trackTitle.text = song.title
+        screen.trackArtist.text = song.artist
+        screen.setTrackAvailable(true)
+        screen.updateTimeline(0, song.duration * 1000, false)
         message.text = "Loading stream…"
         adapter.notifyDataSetChanged()
         hideKeyboard()
@@ -323,13 +269,13 @@ class MainActivity : Activity() {
     private fun loadCover(song: Song, version: Int) {
         coverJob.cancel()
         val pictureJob = MusicSearch.Job().also { coverJob = it }
-        background.setImageDrawable(null)
+        screen.setCover(null)
         workers.execute {
             try {
                 if (song.thumbnail.isNotEmpty()) {
                     val bitmap = loadBitmap(song.thumbnail, 1280, pictureJob)
                     ui.post {
-                        if (!closed && version == playVersion) background.setImageBitmap(bitmap) else bitmap.recycle()
+                        if (!closed && version == playVersion) screen.setCover(bitmap) else bitmap.recycle()
                     }
                 }
             } catch (_: Exception) { /* A missing cover shouldn't stop playback. */ }
@@ -338,7 +284,7 @@ class MainActivity : Activity() {
 
     private fun togglePlayback() {
         playback?.toggle()
-        pause.text = if (playback?.desiredPlaying == true) "Pause" else "Play"
+        screen.setPlaying(playback?.desiredPlaying == true)
         showControls()
     }
     private fun seek(amount: Long) {
@@ -375,13 +321,7 @@ class MainActivity : Activity() {
             start()
         }
     }
-    private fun positionControls() {
-        val height = controls.height.toFloat()
-        spectrum.translationY = -height * progress
-        controls.alpha = progress
-        controls.translationY = height * (1 - progress)
-        if (progress == 0f) controls.visibility = View.INVISIBLE
-    }
+    private fun positionControls() { screen.positionControls(progress) }
 
     private inner class ResultsAdapter : BaseAdapter() {
         override fun getCount() = songs.size
@@ -390,11 +330,9 @@ class MainActivity : Activity() {
         override fun getView(position: Int, recycled: View?, parent: ViewGroup): View {
             val row = recycled?.tag as? ResultRow ?: ResultRow()
             val song = getItem(position)
-            row.name.text = "${position + 1}. ${song.title}"
-            row.artist.text = "${song.artist} · ${time(song.duration * 1000)}"
-            row.root.setBackgroundColor(if (song.url == playingUrl) Color.argb(120, 30, 88, 82) else Color.TRANSPARENT)
+            row.bind(song, song.url == playingUrl)
             val url = song.preview
-            row.picture.setImageBitmap(cache[url])
+            row.setPicture(cache[url])
             if (!closed && url.isNotEmpty() && url !in failedImages && cache[url] == null && pendingImages.add(url)) {
                 val version = searchVersion
                 val job = imageJob
@@ -411,30 +349,7 @@ class MainActivity : Activity() {
             return row.root
         }
     }
-    private inner class ResultRow {
-        val root = LinearLayout(this@MainActivity)
-        val picture = ImageView(this@MainActivity)
-        val name = label("", 14)
-        val artist = label("", 12)
-        init {
-            root.tag = this
-            root.gravity = Gravity.CENTER_VERTICAL
-            root.setPadding(dp(4), dp(7), dp(4), dp(7))
-            picture.scaleType = ImageView.ScaleType.CENTER_CROP
-            picture.setBackgroundColor(Color.rgb(28, 36, 46))
-            picture.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            root.addView(picture, LinearLayout.LayoutParams(dp(80), dp(48)).apply { rightMargin = dp(10) })
-            name.maxLines = 2
-            name.ellipsize = TextUtils.TruncateAt.END
-            artist.setSingleLine()
-            artist.ellipsize = TextUtils.TruncateAt.END
-            artist.setTextColor(Color.rgb(151, 173, 183))
-            val labels = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
-            labels.addView(name)
-            labels.addView(artist)
-            root.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-        }
-    }
+    private inner class ResultRow : SongRow(this@MainActivity)
 
     private fun showSettings() {
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(24), dp(8), dp(24), 0) }
@@ -466,20 +381,14 @@ class MainActivity : Activity() {
                 }
             }.show()
     }
-    private fun button(text: String, click: () -> Unit) = Button(this).apply {
-        this.text = text
-        setOnClickListener { showControls(); click() }
-    }
-    private fun label(text: String, size: Int) = TextView(this).apply {
-        this.text = text
-        textSize = size.toFloat()
-        setTextColor(Color.rgb(212, 224, 232))
+    private fun label(text: String, size: Int) = RoomStyle.label(this, text, size).apply {
         setPadding(0, dp(4), 0, dp(4))
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
-    private fun time(value: Long) = if (value < 0) "--:--" else String.format(Locale.ROOT, "%d:%02d", value / 60000, value / 1000 % 60)
     private fun hideKeyboard() {
         getSystemService(InputMethodManager::class.java)?.hideSoftInputFromWindow(query.windowToken, 0)
+        query.clearFocus()
+        screen.root.requestFocus()
     }
     override fun onStart() {
         super.onStart()

@@ -10,8 +10,8 @@ android {
         applicationId = "local.music.kotlinplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
     val localSigningKey = rootProject.file(".signing/debug.keystore")
     if (localSigningKey.exists()) {
@@ -25,6 +25,7 @@ android {
     testOptions.unitTests.isIncludeAndroidResources = true
     testOptions.unitTests.all {
         it.systemProperty("music.liveTests", providers.gradleProperty("liveTests").getOrElse("false"))
+        it.systemProperty("music.previewDir", providers.gradleProperty("previewDir").getOrElse(""))
     }
     packaging.resources.merges += setOf("META-INF/LICENSE*", "META-INF/NOTICE*")
 }

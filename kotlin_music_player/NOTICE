@@ -1,0 +1,23 @@
+Music Player
+Copyright (C) 2026 Himanshu_Sharma (HimanshuS073)
+SPDX-License-Identifier: GPL-3.0-or-later
+
+The original Music Player source code and documentation are licensed under the
+GNU General Public License, version 3 or (at your option) any later version.
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of that license as published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE. See LICENSE for the full terms.
+
+Third-party software, license texts, certificates, and other third-party
+materials retain their own copyright notices and licenses. They are not
+relicensed by this notice. See THIRD_PARTY_NOTICES.md and licenses/.
+
+Songs, videos, thumbnails, artwork, trademarks, and metadata obtained from
+external services are not granted a license by this project. Permission to
+use the software does not grant permission to use or redistribute that content.
+
+Project source: https://github.com/HimanshuS073/music_visualizer

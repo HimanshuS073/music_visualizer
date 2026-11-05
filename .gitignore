@@ -41,7 +41,7 @@ cookies.txt
 .DS_Store
 local.properties
 
-# Keep Android source and packages local.
+# Keep the older Java Android project and generated packages local.
 /android/
 *.apk
 *.aab

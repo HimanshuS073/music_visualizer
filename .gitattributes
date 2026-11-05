@@ -2,3 +2,7 @@
 LICENSE -text -whitespace
 licenses/** -text -whitespace
 android/src/main/assets/licenses/** -text -whitespace
+kotlin_music_player/LICENSE -text -whitespace
+kotlin_music_player/app/src/main/assets/licenses/** -text -whitespace
+kotlin_music_player/gradlew text eol=lf
+kotlin_music_player/gradlew.bat text eol=crlf

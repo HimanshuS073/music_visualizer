@@ -111,7 +111,7 @@ repository, so cloning it gives you the source, not the installers.
 | --- | --- | --- |
 | Linux | `music-player-linux-x86_64.run` | x86-64 Linux with graphics and PipeWire/PulseAudio |
 | Windows | `music-player-windows-x64.exe` | Windows 10/11, 64-bit |
-| Android | `music-player-android.apk` | Android 8.0 or newer |
+| Android (Music Room) | `music-room-v3.apk` in the Android release | Android 8.0 or newer |
 
 These builds include their app dependencies. You still need internet access,
 working graphics drivers, and an audio output. Linux also uses your existing
@@ -159,32 +159,29 @@ can affect the bars. Its startup, search, backend connection, and playback
 controls were tested under Wine. Audio capture still needs testing on real
 Windows hardware.
 
-### Android
+### Android — Music Room
 
-Install the APK, search for a song, and tap a result. The bottom buttons pause,
-resume, and seek 10 seconds. Each result includes a small thumbnail loaded into
-memory. While music plays, the song title and controls hide after three seconds;
-tap the visualizer area to show them again. The bars slide down when controls
-hide and keep the same height. Paused playback and screen-reader touch exploration
-keep the controls visible.
+Download the APK from [Music Room 1.2](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.2).
+It supports Android 8 and newer. Install it once over the earlier **Kotlin** app
+to get the updater. The older Java Android app is a separate application.
 
-Open **Settings** to change the bar count, color
-speed, and video sampling rate. Playback pauses when the app goes into the
-background. A stream that finishes loading while the app is in the background
-stays paused. New searches and selections cancel their old network requests.
+Search for a song and tap a result. Music keeps playing when you switch apps or
+lock the screen. Pause/resume and seek controls are available in the window;
+Android's media notification also controls playback. Swiping Music Room out of
+Recents stops it. Controls hide smoothly while playing; tap the visualizer to
+show them. Settings change the bar count, color speed and video sampling rate.
 
-Android uses Media3 for playback and NewPipe Extractor for search and stream
-resolution. It doesn't need Python, mpv, or Termux. The FFT reads the player's
-own audio, without recording the microphone. Android 12+ blurs the cover
-background; older versions show a muted cover.
+Music Room checks GitHub for new Android releases at startup. Accept the update
+prompt to download the APK, then approve Android's installation prompt. Android
+may ask you to allow installs from Music Room once. Updates keep the same app
+and settings. **Settings → Check updates** checks manually.
 
-The APK is a test-signed personal build. Compilation, signature checks, and a
-live search/stream test passed, but the UI, playback, and FFT still need testing
-on a phone. The updated APK is version 1.1 (version code 2), supports Android 8.0+
-and targets Android 16/API 36. It uses the same certificate as the earlier APK.
-The Android source folder and APK are kept locally and excluded from this
-repository. Verification details are in
-[TEST_REPORT.md](TEST_REPORT.md).
+The Kotlin source and build instructions are in
+[kotlin_music_player/](kotlin_music_player/README.md). Signing keys and generated
+files remain private. The app uses native Android views, Media3 and NewPipe;
+it needs no Python, mpv or Termux. Automated checks are documented in
+[the Android test report](kotlin_music_player/TEST_REPORT.md). Real phone playback
+and installer testing are still needed. The APK is a personal debug-signed build.
 
 ## Terminal player
 
@@ -265,7 +262,8 @@ loading return `available: false`.
 - `config.lua` holds desktop appearance and visualizer settings.
 - `music_call_just_yt_dlp.py` runs the terminal player and JSON backend.
 - `python_code_music/` contains the search, playback, controls, image, and audio functions.
-- `android/src/main/` is the local-only Android app folder; Git ignores it.
+- `kotlin_music_player/` contains the public Music Room Android project.
+- `android/src/main/` is the older local Java Android app; Git ignores it.
 
 Build scripts and download caches were removed after making the packaged builds.
 The source is still here, but rebuilding them needs a new build setup. Bundled

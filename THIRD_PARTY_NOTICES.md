@@ -6,6 +6,14 @@ our own code; it does not replace any dependency's license.
 
 ## Android
 
+Music Room's public Kotlin source and bundled license copies are in
+[`kotlin_music_player/`](kotlin_music_player/README.md). It uses Media3 ExoPlayer
+and Session 1.8.0, AndroidX Core 1.16.0 (Apache-2.0), NewPipe v0.26.5,
+OkHttp 4.12.0 and Kotlin 2.3.0. AndroidX sources are available from
+[the AndroidX project](https://android.googlesource.com/platform/frameworks/support/).
+Robolectric and JUnit are test-only dependencies and are not included in the APK.
+
+
 | Component | License | Notice or source |
 | --- | --- | --- |
 | NewPipe Extractor v0.26.5 | GPL-3.0-or-later | [License](https://github.com/HimanshuS073/music_visualizer/blob/cb7316e2670567420ca92c17f6e000cb819468cd/android/src/main/assets/licenses/NewPipe-GPL-3.0.txt), [source](https://github.com/TeamNewPipe/NewPipeExtractor/tree/v0.26.5) |

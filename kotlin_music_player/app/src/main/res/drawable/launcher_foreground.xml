@@ -1,0 +1,6 @@
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:insetLeft="14%" android:insetRight="14%"
+    android:insetTop="26%" android:insetBottom="26%">
+    <bitmap android:src="@drawable/music_room_logo"
+        android:gravity="fill" android:filter="true" />
+</inset>

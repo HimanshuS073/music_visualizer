@@ -1,33 +1,31 @@
-# Music Room 1.6 verification
+# Music Room 1.7 logo verification
 
 Checked on November 5, 2026.
 
 ## Build
 
-- Version 1.6, code 7; `local.music.kotlinplayer`, minimum API 26, target API 36.
+- Version 1.7, code 8; `local.music.kotlinplayer`, minimum API 26, target API 36.
 - Gradle 8.13, AGP 8.13.2, Kotlin 2.3.0, JDK 17.
-- APK: `releases/music-room-v7.apk`; 7,979,831 bytes.
-- SHA-256: `85682b4ddc8f641e4cd3f8a142019182a9ffda89a47176bbc8b132e789ac65f5`.
-- APK signature matches previous Kotlin installs. v2 signature, ZIP integrity
-  and 16 KiB ZIP alignment checks passed.
-- Lint: 0 errors, 28 warnings and 1 hint.
+- APK: `releases/music-room-v8.apk`, 8,697,375 bytes.
+- SHA-256: `2085081c483a8ded125ffecf8bc61ba814f53ffb01236aa40710f59220b5888f`.
+- APK v2 signature, ZIP integrity and 16 KiB alignment checks passed.
+- Signing certificate matches the previous Kotlin releases for in-place updates.
+- Lint: 0 errors, 30 warnings and 1 hint.
 
-## Removal
+## Logo
 
-The video background setting, preference reads/writes, frame presentation,
-CPU blur helper, feature-specific tests and generated feature preview were
-removed. The APK DEX files were checked for the removed renderer class and
-preference identifier; neither remains. The old preference, if present in an
-existing install, is never read or used.
+The supplied `Golden Music Room Studio Logo.png` was copied unchanged to
+`app/src/main/res/drawable-nodpi/music_room_logo.png`. Original and bundled source
+bytes match. The original file in the project root was preserved.
 
-Only the thumbnail is used for the background. The small video surface still
-supplies colors for the visualizer, as it did before the removed feature.
-Visualizer height, other settings, automatic result hiding, background music
-and GitHub updates remain available.
+The manifest launcher and round icon reference `mipmap/ic_launcher`. An adaptive
+icon combines a black background with fractional foreground insets, keeping the
+landscape image's aspect ratio and complete lettering. The notification keeps
+its separate small symbol; it does not use the full-color raster logo.
 
 ## Tests
 
-Command:
+Command with SDK/JDK configured:
 
 ```sh
 ./gradlew --no-daemon --console=plain :app:assembleDebug :app:lintDebug :app:testDebugUnitTest -PliveTests=true -PpreviewDir="$PWD/releases/previews"
@@ -36,6 +34,7 @@ Command:
 | Suite | Tests | Failures | Skipped |
 | --- | ---: | ---: | ---: |
 | FftTest | 7 | 0 | 0 |
+| LauncherIconTest | 2 | 0 | 0 |
 | LiveSearchTest | 1 | 0 | 0 |
 | MainSettingsTest | 2 | 0 | 0 |
 | MusicScreenTest | 12 | 0 | 0 |
@@ -44,21 +43,29 @@ Command:
 | ReleaseUpdatesTest | 10 | 0 | 0 |
 | UpdateInstallerTest | 7 | 0 | 0 |
 
-All 51 tests passed, including live YouTube search/thumbnail/stream checks.
-Settings tests verify that the removed switch is absent while height still
-saves/restores and invalid input remains rejected. A native renderer test
-verifies that transport, height and result-panel changes do not replace the
-thumbnail background, and clearing the cover clears the background.
+All 53 tests passed, including the live YouTube check. New native renderer tests
+load the actual icon through ApplicationInfo, verify the 1536×1024 supplied
+bitmap, and check that circular and rounded-square masks preserve the artwork.
+The visible-pixel count matches the unmasked version within a small tolerance;
+48-pixel icon renders are also checked for visible content.
 
-The deleted feature's tests were removed, not disabled. Existing FFT, layout,
-result-hiding, lifecycle, network cancellation and update-validation checks pass.
+Previews in `releases/previews/music-room-launcher-circle.png` and
+`music-room-launcher-rounded-square.png` were inspected. Independent PNG reads
+confirmed equal visible-artwork counts in the exported previews. These are
+native resource renders, not screenshots from a physical Android launcher.
+
+Existing playback, search, thumbnail backgrounds, settings, result hiding and
+update validation tests still pass. The removed video-background feature was
+not restored. No runtime dependency was added.
 
 ## Limits
 
-Robolectric tests simulate API 28. Actual audio/video-color sampling, system UI,
-installer and lifecycle behavior on physical Android devices still need phone
-testing. No new CPU/RAM/battery benchmark was performed. Preview artwork is
-sample data, not a phone capture.
+Tests simulate API 28. Physical launcher appearance, vendor icon packs, launcher
+caching and Android system splash presentation still need checking on a phone.
+No optional monochrome icon was supplied; the intended artwork is full color.
+Lint reports that recommendation and the redundant v26 folder qualifier, along
+with existing localization, dependency-update and backup warnings.
 
-Signing keys, APKs and previews remain Git-ignored. Historical release tags are
-unchanged; the current source and new APK contain the removal.
+The private signing key and generated APKs/previews remain excluded from Git.
+Only the copied app resource is included in source; the root original is not
+added as a duplicate repository asset.

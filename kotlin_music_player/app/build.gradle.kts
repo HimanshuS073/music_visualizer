@@ -10,8 +10,8 @@ android {
         applicationId = "local.music.kotlinplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 8
+        versionName = "1.7"
     }
     val localSigningKey = rootProject.file(".signing/debug.keystore")
     if (localSigningKey.exists()) {

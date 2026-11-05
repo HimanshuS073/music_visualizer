@@ -43,6 +43,7 @@ class MainActivity : Activity() {
     private var active = false
     private var searching = false
     private var playingUrl = ""
+    private var restoredScreenState = false
     private val songs = mutableListOf<Song>()
     private val pendingImages = mutableSetOf<String>()
     private val failedImages = mutableSetOf<String>()
@@ -65,6 +66,7 @@ class MainActivity : Activity() {
                 trackTitle.text = song.title
                 screen.trackArtist.text = song.artist
                 screen.setTrackAvailable(true)
+                if (!restoredScreenState && !searching && songs.isEmpty()) screen.setResultsHidden(true)
                 loadCover(song, ++playVersion)
                 adapter.notifyDataSetChanged()
             }
@@ -121,6 +123,8 @@ class MainActivity : Activity() {
         super.onCreate(state)
         settings = getSharedPreferences("music", MODE_PRIVATE)
         buildLayout()
+        restoredScreenState = state?.containsKey("results_hidden") == true
+        screen.setResultsHidden(state?.getBoolean("results_hidden", false) ?: false)
         spectrum.count = settings.getInt("bars", 48)
         spectrum.colorSpeed = settings.getFloat("colorSpeed", 10f)
         videoFps = settings.getInt("videoFps", 8).coerceIn(1, 10)
@@ -252,6 +256,10 @@ class MainActivity : Activity() {
         val service = playback ?: run { message.text = "Playback is still connecting. Try again."; return }
         coverJob.cancel()
         service.select(song)
+        screen.setResultsHidden(true)
+        imageJob.cancel()
+        images.queue.clear()
+        pendingImages.clear()
         spectrum.reset()
         screen.setPlaying(true)
         playingUrl = song.url
@@ -400,6 +408,7 @@ class MainActivity : Activity() {
     }
     override fun onSaveInstanceState(state: Bundle) {
         updates.saveState(state)
+        state.putBoolean("results_hidden", screen.resultsHidden)
         super.onSaveInstanceState(state)
     }
     override fun onResume() {

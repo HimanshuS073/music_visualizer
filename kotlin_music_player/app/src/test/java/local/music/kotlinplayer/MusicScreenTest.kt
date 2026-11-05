@@ -190,6 +190,60 @@ class MusicScreenTest {
             assertEquals(View.VISIBLE, screen.playbackArea.visibility)
         } finally { controller.destroy() }
     }
+    @Test fun selectingTrackHidesResultsUntilAnExplicitNewSearch() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create()
+        try {
+            val screen = makeScreen(controller.get())
+            fillResults(screen, controller.get())
+            layout(screen)
+            val oldPlayerHeight = screen.playbackArea.height
+            screen.setResultsHidden(true)
+            layout(screen)
+            assertTrue(screen.resultsHidden)
+            val library = (screen.list.parent as View).parent as View
+            assertEquals(View.GONE, library.visibility)
+            assertTrue(screen.playbackArea.height > oldPlayerHeight)
+            assertEquals(5, screen.list.adapter.count)
+            screen.setPlaying(false)
+            screen.showResults(5)
+            screen.showSearchError()
+            assertEquals(View.GONE, library.visibility)
+            screenshot(screen, "music-room-listening")
+            screen.showSearching("another song")
+            layout(screen)
+            assertFalse(screen.resultsHidden)
+            assertEquals(View.VISIBLE, library.visibility)
+            screen.showResults(5)
+            assertFalse(screen.resultsHidden)
+        } finally { controller.destroy() }
+    }
+    @Test fun hiddenResultsStayHiddenWhenResizingOrUsingTheKeyboard() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create()
+        try {
+            val screen = makeScreen(controller.get())
+            fillResults(screen, controller.get())
+            screen.setResultsHidden(true)
+            for ((width, height) in listOf(320 to 640, 393 to 852, 800 to 400)) {
+                layout(screen, width, height)
+                assertTrue(screen.resultsHidden)
+                assertTrue(screen.playbackArea.width >= width - 50)
+                assertTrue(screen.pause.isEnabled)
+                val barsHeight = screen.spectrum.height
+                screen.positionControls(0f)
+                assertEquals(barsHeight, screen.spectrum.height)
+                screen.positionControls(1f)
+                screenshot(screen, "music-room-listening-${width}x$height")
+            }
+            screen.configureViewport(800, 400, true)
+            layout(screen, 800, 400)
+            assertTrue(screen.resultsHidden)
+            assertEquals(View.GONE, screen.playbackArea.visibility)
+            screen.configureViewport(800, 400, false)
+            layout(screen, 800, 400)
+            assertEquals(View.VISIBLE, screen.playbackArea.visibility)
+            assertTrue(screen.resultsHidden)
+        } finally { controller.destroy() }
+    }
     @Test fun rendersEmptyAndLargeTextStates() {
         val controller = Robolectric.buildActivity(Activity::class.java).create()
         try {

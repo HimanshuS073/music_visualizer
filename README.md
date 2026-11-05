@@ -111,7 +111,7 @@ repository, so cloning it gives you the source, not the installers.
 | --- | --- | --- |
 | Linux | `music-player-linux-x86_64.run` | x86-64 Linux with graphics and PipeWire/PulseAudio |
 | Windows | `music-player-windows-x64.exe` | Windows 10/11, 64-bit |
-| Android (Music Room) | `music-room-v4.apk` in the Android release | Android 8.0 or newer |
+| Android (Music Room) | `music-room-v5.apk` in the Android release | Android 8.0 or newer |
 
 These builds include their app dependencies. You still need internet access,
 working graphics drivers, and an audio output. Linux also uses your existing
@@ -161,11 +161,12 @@ Windows hardware.
 
 ### Android — Music Room
 
-Download the APK from [Music Room 1.3](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.3).
+Download the APK from [Music Room 1.4](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.4).
 It supports Android 8 and newer. Install it once over the earlier **Kotlin** app
 to get the updater. The older Java Android app is a separate application.
 
-Search for a song and tap a result. Music keeps playing when you switch apps or
+Search for a song and tap a result. The list hides until you search again, leaving
+the listening area clear. Music keeps playing when you switch apps or
 lock the screen. Pause/resume and seek controls are available in the window;
 Android's media notification also controls playback. Swiping Music Room out of
 Recents stops it. Controls hide smoothly while playing; tap the visualizer to

@@ -9,8 +9,11 @@ stay out of Git; installers are attached to GitHub releases.
 
 Search for a song and tap a result to play it. Small thumbnails load beside the
 results, and the selected song's cover becomes a muted background. Searching
-again keeps the current track playing. Selecting another result stops the old
-track and resolves a fresh stream.
+again keeps the current track playing. Selecting a result hides the list and
+leaves the listening area clear. The list returns when you submit another search,
+even if the same song is still playing. Selecting another result stops the old
+track and resolves a fresh stream. Hiding results survives rotation and does not
+clear the result data. Queued preview downloads stop once a song is selected.
 
 The controls pause/resume playback and seek ten seconds in either direction.
 While music plays, they hide after three seconds. Tap the visualizer area to
@@ -80,7 +83,7 @@ Then run:
 ```
 
 The result is `app/build/outputs/apk/debug/app-debug.apk`. Local checked copies
-are kept in `releases/`; GitHub installers use names such as `music-room-v4.apk`.
+are kept in `releases/`; GitHub installers use names such as `music-room-v5.apk`.
 The number in the filename is Android's version code, not its display version.
 
 The application ID is `local.music.kotlinplayer`, so it can be installed beside
@@ -93,7 +96,7 @@ an installation signed with the original key.
 ## App updates
 
 Install the latest Music Room APK from the
-[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.3).
+[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.4).
 Earlier APKs don't contain the updater.
 
 On launch, Music Room checks public GitHub releases in the background. When a
@@ -118,7 +121,7 @@ playing. Pending installer permissions survive normal activity recreation.
 
 The updater looks through the 100 most recent releases, ignores drafts and
 prereleases, and only accepts Android tags like `android-v1.3` with assets named
-`music-room-v4.apk`. Desktop releases don't affect it. The asset must include
+`music-room-v5.apk`. Desktop releases don't affect it. The asset must include
 GitHub's SHA-256 digest. It selects the highest newer version code.
 
 ## Publishing the next Android update
@@ -146,7 +149,8 @@ Tags follow `android-v<versionName>` and APK names follow
 `music-room-v<versionCode>.apk`. Existing desktop releases aren't replaced.
 The source must be committed first so the release points to the matching code.
 Keep unique version names and codes; the helper won't overwrite a published
-release. A draft left by an interrupted upload can be resumed.
+release. Its source check covers this Kotlin folder, so unrelated untracked
+files elsewhere in the repository do not block publication. A draft left by an interrupted upload can be resumed.
 Nothing has to be added to GitHub Secrets, and the signing key never leaves
 your machine. A GitHub APK update is user-approved, not a silent install.
 

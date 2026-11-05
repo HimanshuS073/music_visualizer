@@ -1,13 +1,13 @@
-# Music Room 1.3 UI verification
+# Music Room 1.4 verification
 
 Checked on November 5, 2026.
 
 ## Build
 
-- Version 1.3, version code 4; application ID `local.music.kotlinplayer`.
+- Version 1.4, version code 5; application ID `local.music.kotlinplayer`.
 - Minimum API 26, target API 36; existing signing key preserved.
-- APK: `releases/music-room-v4.apk`, 8,214,146 bytes.
-- SHA-256: `2ed6b936ae0f9b94ddfc6173803ce941b53a8d1819ee71df65c114b8894cf041`.
+- APK: `releases/music-room-v5.apk`, 7,978,055 bytes.
+- SHA-256: `810b60019cb3502d600c60f42a28ee10230211f71ac77535624ee4996920cfad`.
 - Gradle 8.13, AGP 8.13.2, Kotlin 2.3.0, JDK 17.
 - Lint: 0 errors, 29 warnings and 1 hint; no lint suppression added.
   Remaining warnings concern localization, dependency/tool updates and backup metadata.
@@ -28,16 +28,16 @@ Command from this folder with the SDK/JDK configured:
 | --- | ---: | ---: | ---: |
 | FftTest | 7 | 0 | 0 |
 | LiveSearchTest | 1 | 0 | 0 |
-| MusicScreenTest | 7 | 0 | 0 |
+| MusicScreenTest | 9 | 0 | 0 |
 | MusicSearchTest | 8 | 0 | 0 |
-| PlaybackServiceTest | 3 | 0 | 0 |
+| PlaybackServiceTest | 4 | 0 | 0 |
 | ReleaseUpdatesTest | 10 | 0 | 0 |
 | UpdateInstallerTest | 7 | 0 | 0 |
 
-All 43 tests passed, including actual YouTube search/thumbnail/stream requests.
+All 46 tests passed, including actual YouTube search/thumbnail/stream requests.
 Playback lifecycle, updater and installer-validation suites still pass.
 
-The seven new UI tests check search submission from the button and keyboard,
+The nine UI tests check search submission from the button and keyboard,
 pause/ten-second actions, accessible timeline adjustment, elapsed/duration
 formatting, unknown-duration handling, keeping controls inside the viewport,
 keyboard space, unchanged bar height during control hiding, and empty/large-text
@@ -63,7 +63,25 @@ being covered by the card; placement now belongs to the screen component and
 bars render above the controls. Lint found an API-27 theme attribute in the
 API-26 base theme; it was removed, keeping Android 8.0 support.
 
-## What changed
+## Result hiding in 1.4
+
+Selecting a track hides the entire results panel immediately. The playback
+area fills the freed space without increasing the bar height. Only submitting
+a new search restores the panel. Pause, late result/error callbacks, rotation,
+resizing and the keyboard don't restore it. Saved activity state preserves
+whether results were hidden, and a fresh window reconnecting to an ongoing
+track starts with the results hidden. Queued thumbnail downloads stop on
+selection. Search result data isn't deleted just to hide the panel.
+
+Two native UI tests verify hide/show behavior, retained result data, resizing,
+keyboard interactions and unchanged bar height. A service/activity test verifies
+saved hidden/visible state through window recreation. Native previews named
+`music-room-listening*.png` show the hidden-list state using sample artwork.
+
+The release helper now scopes its uncommitted-source check to this Kotlin
+project, so unrelated untracked files outside it don't block publishing.
+
+## Interface
 
 Rounded result cards and artwork, consistent sans-serif text, warm dark colors,
 mint transport buttons, empty/search states and a compact artwork player replace
@@ -82,4 +100,4 @@ ADB found no connected phone. Touch, real keyboard/insets and system-bar
 behavior, actual audio/video and FFT rendering still need device testing,
 especially on API 26 and Android 14–16. No CPU, RAM or battery benchmark was
 performed. Existing simulated background playback tests are not real-device
-playback tests. The checked artifact is prepared for the `android-v1.3` release.
+playback tests. The checked artifact is prepared for the `android-v1.4` release.

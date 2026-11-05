@@ -63,6 +63,10 @@ class MusicScreen(
     private var bottomInset = 0
     private var imeVisible = false
     private var layoutKey = ""
+    private var viewportWidth = 0
+    private var viewportHeight = 0
+    var resultsHidden = false
+        private set
     private var reveal = 1f
     var seeking = false
         private set
@@ -264,9 +268,11 @@ class MusicScreen(
     fun configureViewport(width: Int, height: Int, keyboard: Boolean) {
         if (width <= 0 || height <= 0) return
         imeVisible = keyboard
-        val landscape = width >= dp(600) && width > height && !keyboard
+        viewportWidth = width
+        viewportHeight = height
+        val landscape = width >= dp(600) && width > height && !keyboard && !resultsHidden
         val compact = height < dp(560)
-        val key = "$landscape:$compact:$keyboard"
+        val key = "$landscape:$compact:$keyboard:$resultsHidden"
         if (layoutKey == key) return
         layoutKey = key
         eyebrow.visibility = if (compact) View.GONE else View.VISIBLE
@@ -277,10 +283,12 @@ class MusicScreen(
         panelGap = if (compact) 8 else 12
         spectrum.layoutParams.height = dp(spectrumHeight)
         body.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+        library.visibility = if (resultsHidden) View.GONE else View.VISIBLE
         library.layoutParams = if (landscape) LinearLayout.LayoutParams(0, -1, 1f)
             else LinearLayout.LayoutParams(-1, 0, 1f)
         playbackArea.visibility = if (keyboard) View.GONE else View.VISIBLE
-        playbackArea.layoutParams = if (landscape)
+        playbackArea.layoutParams = if (resultsHidden) LinearLayout.LayoutParams(-1, 0, 1f)
+        else if (landscape)
             LinearLayout.LayoutParams(dp(290), -1).apply { leftMargin = dp(20) }
         else LinearLayout.LayoutParams(-1, dp(spectrumHeight + panelGap) + max(controls.height, dp(154)))
         body.requestLayout()
@@ -296,12 +304,18 @@ class MusicScreen(
     }
     fun fitPlayerHeight() {
         val params = playbackArea.layoutParams
-        if (body.orientation == LinearLayout.VERTICAL && params.height != controls.height + dp(spectrumHeight + panelGap)) {
+        if (!resultsHidden && body.orientation == LinearLayout.VERTICAL && params.height != controls.height + dp(spectrumHeight + panelGap)) {
             params.height = controls.height + dp(spectrumHeight + panelGap)
             playbackArea.layoutParams = params
         }
     }
+    fun setResultsHidden(hidden: Boolean) {
+        if (resultsHidden == hidden) return
+        resultsHidden = hidden
+        configureViewport(viewportWidth, viewportHeight, imeVisible)
+    }
     fun showSearching(name: String) {
+        setResultsHidden(false)
         sectionTitle.text = "Searching"
         resultCount.text = ""
         emptyTitle.text = "Finding your sound…"

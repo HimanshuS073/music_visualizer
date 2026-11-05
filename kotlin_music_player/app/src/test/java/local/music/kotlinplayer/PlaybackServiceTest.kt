@@ -58,6 +58,33 @@ class PlaybackServiceTest {
         } finally { serviceController.destroy() }
     }
 
+    @Test fun windowRecreationPreservesWhetherResultsWereHidden() {
+        val serviceController = Robolectric.buildService(PlaybackService::class.java).create()
+        val service = serviceController.get()
+        shadowOf(RuntimeEnvironment.getApplication()).setComponentNameAndServiceForBindService(
+            ComponentName(service, PlaybackService::class.java),
+            service.onBind(Intent().setAction(PlaybackService.LOCAL_BIND))!!)
+        fun screen(activity: MainActivity) = MainActivity::class.java.getDeclaredField("screen")
+            .apply { isAccessible = true }.get(activity) as MusicScreen
+        val first = Robolectric.buildActivity(MainActivity::class.java).create().start().resume()
+        try {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            screen(first.get()).setResultsHidden(true)
+            val state = android.os.Bundle()
+            first.saveInstanceState(state).pause().stop().destroy()
+            assertTrue(state.getBoolean("results_hidden"))
+            val second = Robolectric.buildActivity(MainActivity::class.java).create(state).start().resume()
+            try {
+                shadowOf(android.os.Looper.getMainLooper()).idle()
+                assertTrue(screen(second.get()).resultsHidden)
+                screen(second.get()).showSearching("new song")
+                val nextState = android.os.Bundle()
+                second.saveInstanceState(nextState)
+                assertFalse(nextState.getBoolean("results_hidden"))
+            } finally { second.pause().stop().destroy() }
+        } finally { serviceController.destroy() }
+    }
+
     @Test fun removingTaskStopsPlaybackAndServiceWithoutRestart() {
         val controller = Robolectric.buildService(PlaybackService::class.java).create()
         val service = controller.get()

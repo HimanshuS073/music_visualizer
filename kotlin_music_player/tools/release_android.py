@@ -31,7 +31,7 @@ def main():
     args = parser.parse_args()
     if not (PROJECT / ".signing/debug.keystore").is_file():
         raise SystemExit("The original local signing key is required for update-compatible releases.")
-    if args.publish and run("git", "status", "--porcelain", capture=True).strip():
+    if args.publish and run("git", "status", "--porcelain", "--", ".", capture=True).strip():
         raise SystemExit("Commit the source changes before publishing a release.")
     config = (PROJECT / "app/build.gradle.kts").read_text()
     code = int(re.search(r'versionCode\s*=\s*(\d+)', config)[1])

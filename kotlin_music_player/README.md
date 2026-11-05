@@ -20,7 +20,21 @@ While music plays, they hide after three seconds. Tap the visualizer area to
 show them again. The bars slide to the bottom without changing height. Controls
 stay visible while paused or when screen-reader touch exploration is enabled.
 
-Settings change the bar count, color-change speed, and video sampling rate.
+Settings change the visualizer height, bar count, color-change speed and video
+sampling rate. Height accepts 24–320 density-independent pixels and is limited
+to the available screen space; the saved preference survives rotation and
+relaunching. The height stays the same when the controls hide or reappear.
+
+Enable **Video background** and tap **Save** for a softly blurred, dimmed moving
+background from the song's video. Turn it off to restore the thumbnail. It is
+off by default. The existing player provides the frames; no second player or
+extra stream is started. Frames stay in memory and aren't saved. Background
+updates follow the existing video sampling setting (1–10 per second). A small
+96×54 frame is blurred before display, keeping the processing bounded even on
+Android 8. The cover stays visible until a real video frame is ready, or if the
+track has no video. Switching apps stops visual updates while audio continues.
+
+
 FFT samples come from the player's audio, and bar colors come from decoded video
 frames. No microphone permission is needed. Songs and images aren't saved to
 disk. Thumbnail memory is capped at 2 MiB; image downloads at 4 MiB each.
@@ -83,7 +97,7 @@ Then run:
 ```
 
 The result is `app/build/outputs/apk/debug/app-debug.apk`. Local checked copies
-are kept in `releases/`; GitHub installers use names such as `music-room-v5.apk`.
+are kept in `releases/`; GitHub installers use names such as `music-room-v6.apk`.
 The number in the filename is Android's version code, not its display version.
 
 The application ID is `local.music.kotlinplayer`, so it can be installed beside
@@ -96,7 +110,7 @@ an installation signed with the original key.
 ## App updates
 
 Install the latest Music Room APK from the
-[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.4).
+[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.5).
 Earlier APKs don't contain the updater.
 
 On launch, Music Room checks public GitHub releases in the background. When a
@@ -121,7 +135,7 @@ playing. Pending installer permissions survive normal activity recreation.
 
 The updater looks through the 100 most recent releases, ignores drafts and
 prereleases, and only accepts Android tags like `android-v1.3` with assets named
-`music-room-v5.apk`. Desktop releases don't affect it. The asset must include
+`music-room-v6.apk`. Desktop releases don't affect it. The asset must include
 GitHub's SHA-256 digest. It selects the highest newer version code.
 
 ## Publishing the next Android update
@@ -179,6 +193,7 @@ still need phone testing. See `TEST_REPORT.md` for this build's results.
 - `MainActivity.kt` handles the window, searches, selection and settings.
 - `PlaybackService.kt` owns playback, stream resolution, the media session and notification.
 - `MusicSearch.kt` handles NewPipe searches, stream resolution and image requests.
+- `VideoBackdrop.kt` renders and blurs the optional video background.
 - `Fft.kt` contains the FFT math, without Android dependencies.
 - `SpectrumView.kt` reads PCM buffers and draws the bars.
 - `ReleaseUpdates.kt` checks GitHub releases and downloads verified bytes.

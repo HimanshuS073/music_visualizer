@@ -38,6 +38,13 @@ class MusicScreen(
     val controls = LinearLayout(activity)
     val cover = ImageView(activity)
     val video = TextureView(activity)
+    private val backdrop = VideoBackdrop(background)
+    var videoReady = false
+        private set
+    val videoBackgroundEnabled get() = backdrop.enabled
+    val wantsVideoFrame get() = videoReady && backdrop.needsFrame
+    var visualizerHeightDp = 72
+        private set
     val trackTitle = text("Nothing playing yet", 15, medium = true)
     val trackArtist = text("Pick a song and settle in.", 12, RoomStyle.muted)
     val pause = RoomIconButton(activity, RoomIcon.PLAY, "Play", RoomStyle.mint, RoomStyle.background) { onInteraction(); onToggle() }
@@ -83,6 +90,10 @@ class MusicScreen(
         background.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(.25f) })
         if (Build.VERSION.SDK_INT >= 31)
             background.setRenderEffect(RenderEffect.createBlurEffect(24f, 24f, Shader.TileMode.CLAMP))
+        // One decoded video surface supplies both colors and the optional backdrop.
+        video.alpha = .01f
+        video.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        root.addView(video, FrameLayout.LayoutParams(dp(160), dp(90)))
         root.addView(background, FrameLayout.LayoutParams(-1, -1))
         root.addView(View(activity).apply {
             this.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
@@ -196,10 +207,6 @@ class MusicScreen(
         cover.setPadding(dp(12), dp(12), dp(12), dp(12))
         cover.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         artwork.addView(cover, FrameLayout.LayoutParams(-1, -1))
-        // A tiny live preview also supplies the visualizer's video colors.
-        video.alpha = .01f
-        video.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        artwork.addView(video, FrameLayout.LayoutParams(dp(24), dp(14), Gravity.BOTTOM or Gravity.END))
         track.addView(artwork, vertical(52, 52))
         val info = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
         trackTitle.maxLines = 2
@@ -247,6 +254,7 @@ class MusicScreen(
             positionControls(reveal)
         }
         playbackArea.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> positionControls(reveal) }
+        body.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitPlayerHeight() }
         setTrackAvailable(false)
         updateTimeline(0, -1, false)
         root.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
@@ -279,7 +287,7 @@ class MusicScreen(
         subtitle.visibility = if (compact) View.GONE else View.VISIBLE
         empty.getChildAt(0).visibility = if (compact || keyboard) View.GONE else View.VISIBLE
         emptyTitle.textSize = if (compact) 19f else 23f
-        spectrumHeight = if (compact) 40 else 72
+        spectrumHeight = visualizerHeightDp
         panelGap = if (compact) 8 else 12
         spectrum.layoutParams.height = dp(spectrumHeight)
         body.orientation = if (landscape) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
@@ -291,6 +299,7 @@ class MusicScreen(
         else if (landscape)
             LinearLayout.LayoutParams(dp(290), -1).apply { leftMargin = dp(20) }
         else LinearLayout.LayoutParams(-1, dp(spectrumHeight + panelGap) + max(controls.height, dp(154)))
+        fitPlayerHeight()
         body.requestLayout()
     }
 
@@ -303,6 +312,16 @@ class MusicScreen(
         controls.visibility = if (reveal == 0f) View.INVISIBLE else View.VISIBLE
     }
     fun fitPlayerHeight() {
+        var height = visualizerHeightDp
+        if (body.height > 0 && controls.height > 0) {
+            val resultsSpace = if (!resultsHidden && body.orientation == LinearLayout.VERTICAL) dp(128) else 0
+            val available = body.height - controls.height - dp(panelGap) - resultsSpace
+            height = minOf(height, (available / activity.resources.displayMetrics.density).toInt().coerceAtLeast(16))
+        }
+        if (spectrumHeight != height || spectrum.layoutParams.height != dp(height)) {
+            spectrumHeight = height
+            spectrum.layoutParams = spectrum.layoutParams.apply { this.height = dp(height) }
+        }
         val params = playbackArea.layoutParams
         if (!resultsHidden && body.orientation == LinearLayout.VERTICAL && params.height != controls.height + dp(spectrumHeight + panelGap)) {
             params.height = controls.height + dp(spectrumHeight + panelGap)
@@ -342,16 +361,28 @@ class MusicScreen(
         pause.icon = if (value) RoomIcon.PAUSE else RoomIcon.PLAY
         pause.contentDescription = if (value) "Pause" else "Play"
     }
+    fun setVisualizerHeight(value: Int) {
+        visualizerHeightDp = value.coerceIn(24, 320)
+        fitPlayerHeight()
+        positionControls(reveal)
+    }
+    fun setVideoBackgroundEnabled(value: Boolean) { backdrop.setEnabled(value) }
+    fun markVideoReady() { videoReady = true }
+    fun resetVideoFrame() { videoReady = false; backdrop.resetFrame() }
+    fun showVideoFrame(frame: Bitmap) {
+        if (!videoReady) { frame.recycle(); return }
+        backdrop.showFrame(frame)
+    }
     fun setCover(bitmap: Bitmap?) {
         if (bitmap == null) {
-            video.alpha = .01f
+            resetVideoFrame()
             cover.setPadding(dp(12), dp(12), dp(12), dp(12))
             cover.setImageDrawable(RoomIconDrawable(RoomIcon.NOTE, RoomStyle.peach))
         } else {
             cover.setPadding(0, 0, 0, 0)
             cover.setImageBitmap(bitmap)
         }
-        background.setImageBitmap(bitmap)
+        backdrop.setCover(bitmap)
     }
     fun updateTimeline(position: Long, length: Long, seekable: Boolean) {
         seekBar.isEnabled = seekable && length > 0

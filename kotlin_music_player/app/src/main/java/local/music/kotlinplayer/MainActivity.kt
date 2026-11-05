@@ -90,6 +90,7 @@ class MainActivity : Activity() {
     private lateinit var controls: LinearLayout
     private var progress = 1f
     private var animation: ValueAnimator? = null
+    private var settingsDialog: AlertDialog? = null
     private var videoFps = 8
     private var lastFrame = 0L
 
@@ -108,11 +109,15 @@ class MainActivity : Activity() {
             }
             screen.updateTimeline(player.currentPosition, player.duration, player.isCurrentMediaItemSeekable)
             val now = SystemClock.uptimeMillis()
-            if (player.isPlaying && video.isAvailable && now - lastFrame >= 1000 / videoFps) {
+            if ((player.isPlaying || screen.wantsVideoFrame) && video.isAvailable && now - lastFrame >= 1000 / videoFps) {
                 lastFrame = now
-                video.getBitmap(64, 36)?.let { frame ->
-                    spectrum.setPalette(IntArray(32) { i -> frame.getPixel(i % 8 * 8 + 4, i / 8 * 9 + 4) })
-                    frame.recycle()
+                val backdrop = screen.videoBackgroundEnabled && screen.videoReady
+                video.getBitmap(if (backdrop) 96 else 64, if (backdrop) 54 else 36)?.let { frame ->
+                    spectrum.setPalette(IntArray(32) { i ->
+                        frame.getPixel((i % 8 * frame.width / 8 + frame.width / 16).coerceAtMost(frame.width - 1),
+                            (i / 8 * frame.height / 4 + frame.height / 8).coerceAtMost(frame.height - 1))
+                    })
+                    if (backdrop) screen.showVideoFrame(frame) else frame.recycle()
                 }
             }
             ui.postDelayed(this, if (player.isPlaying) (1000 / videoFps).toLong() else 500L)
@@ -128,6 +133,8 @@ class MainActivity : Activity() {
         spectrum.count = settings.getInt("bars", 48)
         spectrum.colorSpeed = settings.getFloat("colorSpeed", 10f)
         videoFps = settings.getInt("videoFps", 8).coerceIn(1, 10)
+        screen.setVisualizerHeight(settings.getInt("visualizer_height", 72))
+        screen.setVideoBackgroundEnabled(settings.getBoolean("video_background", false))
         bound = bindService(Intent(this, PlaybackService::class.java).setAction(PlaybackService.LOCAL_BIND),
             connection, BIND_AUTO_CREATE)
         if (!bound) message.text = "Could not connect to playback. Reopen the app."
@@ -156,7 +163,7 @@ class MainActivity : Activity() {
                 }
             }
             override fun onRenderedFirstFrame() {
-                if (active) video.animate().alpha(.85f).setDuration(180).start()
+                screen.markVideoReady()
             }
             override fun onPlayerError(error: PlaybackException) {
                 screen.setPlaying(false)
@@ -170,7 +177,7 @@ class MainActivity : Activity() {
 
     private fun attachPlayback() {
         if (playback == null || !::player.isInitialized) return
-        video.alpha = .01f
+        screen.resetVideoFrame()
         player.setVideoTextureView(video)
         playback?.attachSpectrum(spectrum)
         spectrum.setPlaying(player.isPlaying)
@@ -360,34 +367,73 @@ class MainActivity : Activity() {
     private inner class ResultRow : SongRow(this@MainActivity)
 
     private fun showSettings() {
-        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(24), dp(8), dp(24), 0) }
-        fun field(text: String, value: String): EditText {
+        settingsDialog?.dismiss()
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(8), dp(24), dp(8))
+            isFocusableInTouchMode = true
+        }
+        val videoBackground = Switch(this).apply {
+            text = "Video background"
+            textSize = 16f
+            contentDescription = "Video background"
+            isChecked = screen.videoBackgroundEnabled
+            minimumHeight = dp(48)
+            form.addView(this, LinearLayout.LayoutParams(-1, -2))
+        }
+        form.addView(RoomStyle.label(this, "Live video, softly blurred and dimmed.", 12, RoomStyle.muted))
+        fun field(text: String, value: String, decimal: Boolean = false): EditText {
             form.addView(label(text, 14))
             return EditText(this).apply {
                 setText(value)
-                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-                form.addView(this)
+                contentDescription = text
+                inputType = InputType.TYPE_CLASS_NUMBER or if (decimal) InputType.TYPE_NUMBER_FLAG_DECIMAL else 0
+                minimumHeight = dp(48)
+                form.addView(this, LinearLayout.LayoutParams(-1, -2))
             }
         }
+        val height = field("Visualizer height (24–320)", screen.visualizerHeightDp.toString())
         val count = field("Bar count (8–128)", spectrum.count.toString())
-        val speed = field("Color changes per second (0.1–60)", spectrum.colorSpeed.toString())
-        val frames = field("Video color samples per second (1–10)", videoFps.toString())
-        AlertDialog.Builder(this).setTitle("Music Room settings").setView(form)
+        val speed = field("Color changes per second (0.1–60)", spectrum.colorSpeed.toString(), true)
+        val frames = field("Video updates per second (1–10)", videoFps.toString())
+        form.requestFocus()
+        val scroll = ScrollView(this).apply { addView(form); isFillViewport = false }
+        val dialog = AlertDialog.Builder(this).setTitle("Music Room settings").setView(scroll)
             .setNeutralButton("Check updates") { _, _ -> updates.check() }
-            .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
-                val bars = count.text.toString().toIntOrNull()
-                val color = speed.text.toString().toFloatOrNull()
-                val fps = frames.text.toString().toIntOrNull()
-                if (bars == null || color == null || !color.isFinite() || fps == null) {
-                    message.text = "Enter valid settings numbers."
-                } else {
-                    spectrum.count = bars
-                    spectrum.colorSpeed = color
-                    videoFps = fps.coerceIn(1, 10)
-                    settings.edit().putInt("bars", spectrum.count).putFloat("colorSpeed", spectrum.colorSpeed)
-                        .putInt("videoFps", videoFps).apply()
-                }
-            }.show()
+            .setNegativeButton("Cancel", null).setPositiveButton("Save", null).create()
+        settingsDialog = dialog
+        dialog.setOnDismissListener { if (settingsDialog === dialog) settingsDialog = null }
+        dialog.show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val tall = height.text.toString().toIntOrNull()
+            val bars = count.text.toString().toIntOrNull()
+            val color = speed.text.toString().toFloatOrNull()
+            val fps = frames.text.toString().toIntOrNull()
+            val invalid = when {
+                tall == null || tall !in 24..320 -> height to "Use a height from 24 to 320."
+                bars == null || bars !in 8..128 -> count to "Use 8 to 128 bars."
+                color == null || !color.isFinite() || color !in .1f..60f -> speed to "Use a speed from 0.1 to 60."
+                fps == null || fps !in 1..10 -> frames to "Use 1 to 10 updates per second."
+                else -> null
+            }
+            if (invalid != null) {
+                invalid.first.error = invalid.second
+                invalid.first.requestFocus()
+                return@setOnClickListener
+            }
+            spectrum.count = bars!!
+            spectrum.colorSpeed = color!!
+            videoFps = fps!!
+            screen.setVisualizerHeight(tall!!)
+            screen.setVideoBackgroundEnabled(videoBackground.isChecked)
+            settings.edit().putInt("bars", spectrum.count).putFloat("colorSpeed", spectrum.colorSpeed)
+                .putInt("videoFps", videoFps).putInt("visualizer_height", screen.visualizerHeightDp)
+                .putBoolean("video_background", screen.videoBackgroundEnabled).apply()
+            ui.removeCallbacks(update)
+            ui.post(update)
+            dialog.dismiss()
+        }
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     }
     private fun label(text: String, size: Int) = RoomStyle.label(this, text, size).apply {
         setPadding(0, dp(4), 0, dp(4))
@@ -431,6 +477,8 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         closed = true
         updates.close()
+        settingsDialog?.dismiss()
+        settingsDialog = null
         searchVersion++
         playVersion++
         ui.removeCallbacksAndMessages(null)

@@ -244,6 +244,73 @@ class MusicScreenTest {
             assertTrue(screen.resultsHidden)
         } finally { controller.destroy() }
     }
+    @Test fun customVisualizerHeightPersistsAcrossLayoutsAndControls() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create()
+        try {
+            val screen = makeScreen(controller.get())
+            fillResults(screen, controller.get())
+            screen.setResultsHidden(true)
+            layout(screen)
+            screen.setVisualizerHeight(160)
+            layout(screen)
+            assertEquals(160, screen.visualizerHeightDp)
+            assertEquals(160, screen.spectrum.height)
+            screen.positionControls(0f)
+            assertEquals(160, screen.spectrum.height)
+            screen.positionControls(1f)
+            layout(screen, 800, 400)
+            assertEquals(160, screen.visualizerHeightDp)
+            assertTrue(screen.spectrum.height in 16..160)
+            layout(screen)
+            assertEquals(160, screen.spectrum.height)
+            screenshot(screen, "music-room-tall-bars")
+        } finally { controller.destroy() }
+    }
+    @Test fun heightLimitsLeaveRoomForSearchResultsAndControls() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create()
+        try {
+            val screen = makeScreen(controller.get())
+            fillResults(screen, controller.get())
+            screen.setVisualizerHeight(5000)
+            layout(screen, 320, 640)
+            assertEquals(320, screen.visualizerHeightDp)
+            assertTrue(screen.list.height >= 86)
+            assertTrue(screen.spectrum.height in 16..320)
+            screen.setVisualizerHeight(-2)
+            layout(screen)
+            assertEquals(24, screen.visualizerHeightDp)
+            assertEquals(24, screen.spectrum.height)
+        } finally { controller.destroy() }
+    }
+    @Test fun videoBackgroundWaitsForRealFramesAndCanReturnToCover() {
+        val controller = Robolectric.buildActivity(Activity::class.java).create()
+        try {
+            val screen = makeScreen(controller.get())
+            fillResults(screen, controller.get())
+            screen.setResultsHidden(true)
+            screen.setVisualizerHeight(160)
+            val still = (screen.background.drawable as android.graphics.drawable.BitmapDrawable).bitmap
+            screen.setVideoBackgroundEnabled(true)
+            assertFalse(screen.wantsVideoFrame)
+            val early = Bitmap.createBitmap(96, 54, Bitmap.Config.ARGB_8888)
+            screen.showVideoFrame(early)
+            assertTrue(early.isRecycled)
+            screen.markVideoReady()
+            assertTrue(screen.wantsVideoFrame)
+            val frame = Bitmap.createBitmap(96, 54, Bitmap.Config.ARGB_8888)
+            Canvas(frame).drawRect(0f, 0f, 96f, 54f, Paint().apply {
+                shader = LinearGradient(0f, 0f, 96f, 54f,
+                    intArrayOf(0xFFDA7462.toInt(), 0xFF6FADAA.toInt(), 0xFF9964B7.toInt()), null, Shader.TileMode.CLAMP)
+            })
+            screen.showVideoFrame(frame)
+            assertFalse(screen.wantsVideoFrame)
+            assertSame(frame, (screen.background.drawable as android.graphics.drawable.BitmapDrawable).bitmap)
+            layout(screen)
+            screenshot(screen, "music-room-video-background")
+            screen.setVideoBackgroundEnabled(false)
+            assertSame(still, (screen.background.drawable as android.graphics.drawable.BitmapDrawable).bitmap)
+        } finally { controller.destroy() }
+    }
     @Test fun rendersEmptyAndLargeTextStates() {
         val controller = Robolectric.buildActivity(Activity::class.java).create()
         try {

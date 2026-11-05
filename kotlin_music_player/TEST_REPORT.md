@@ -58,6 +58,22 @@ The original Java Android app and desktop binaries were not changed. Kotlin
 source is now public; only the APK is attached as a release asset. No private
 signing material or credentials are included in Git.
 
+## Public release verification
+
+The release helper published `android-v1.2` after comparing GitHub's uploaded
+asset size and digest with the local APK. It also verified the signing
+certificate and ZIP alignment. A draft-tag lookup issue was fixed by retrieving
+the release by ID; interrupted draft uploads can now be resumed.
+
+A temporary JVM harness then ran the app's actual compiled `ReleaseUpdates`
+code against the unauthenticated public GitHub API. It verified that installed
+code 2 discovers code 3, downloaded the published APK and checked its SHA-256,
+and verified that installed code 3 receives no update. This checks the live
+feed and downloader, not Android's installer UI. The temporary harness and its
+downloads were removed after verification.
+
+Release: https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.2
+
 ## Device limits
 
 ADB found no connected phone. No emulator was used. Real-device installation,

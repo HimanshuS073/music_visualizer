@@ -117,7 +117,8 @@ uploads a draft release, compares GitHub's asset digest, then publishes it.
 Tags follow `android-v<versionName>` and APK names follow
 `music-room-v<versionCode>.apk`. Existing desktop releases aren't replaced.
 The source must be committed first so the release points to the matching code.
-Keep unique version names and codes; the helper won't overwrite an existing tag.
+Keep unique version names and codes; the helper won't overwrite a published
+release. A draft left by an interrupted upload can be resumed.
 Nothing has to be added to GitHub Secrets, and the signing key never leaves
 your machine. A GitHub APK update is user-approved, not a silent install.
 

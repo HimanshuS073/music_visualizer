@@ -75,13 +75,26 @@ def main():
                          f"Source: this release's Source code archives, `kotlin_music_player/`. "
                          "Build and dependency instructions are included there.\n\n"
                          f"SHA-256: `{digest}`\n")
-        run("gh", "release", "create", tag, str(output), "--repo", REPO, "--target", commit,
-            "--draft", "--title", f"Music Room {name} — Android", "--notes-file", str(notes))
-    release = json.loads(run("gh", "api", f"repos/{REPO}/releases/tags/{tag}", capture=True))
-    asset = next((a for a in release["assets"] if a["name"] == output.name), {})
-    if asset.get("digest") != "sha256:" + digest or asset.get("size") != output.stat().st_size:
-        raise SystemExit("Uploaded asset verification failed. Release was left as a draft.")
-    run("gh", "release", "edit", tag, "--repo", REPO, "--draft=false", "--latest=false")
+        releases = json.loads(run("gh", "api", f"repos/{REPO}/releases?per_page=100", capture=True))
+        release = next((item for item in releases if item["tag_name"] == tag), None)
+        if release is not None and not release["draft"]:
+            raise SystemExit("That release is already published. Increase the version before publishing again.")
+        if release is None:
+            run("gh", "release", "create", tag, str(output), "--repo", REPO, "--target", commit,
+                "--draft", "--title", f"Music Room {name} — Android", "--notes-file", str(notes))
+            releases = json.loads(run("gh", "api", f"repos/{REPO}/releases?per_page=100", capture=True))
+            release = next(item for item in releases if item["tag_name"] == tag)
+        else:
+            run("gh", "release", "upload", tag, str(output), "--repo", REPO, "--clobber")
+        endpoint = f"repos/{REPO}/releases/{release['id']}"
+        release = json.loads(run("gh", "api", endpoint, capture=True))
+        asset = next((a for a in release["assets"] if a["name"] == output.name), {})
+        if asset.get("digest") != "sha256:" + digest or asset.get("size") != output.stat().st_size:
+            raise SystemExit("Uploaded asset verification failed. Release was left as a draft.")
+        payload = Path(directory) / "publish.json"
+        payload.write_text(json.dumps({"draft": False, "make_latest": "false", "target_commitish": commit,
+                                       "name": f"Music Room {name} — Android", "body": notes.read_text()}))
+        run("gh", "api", endpoint, "--method", "PATCH", "--input", str(payload), capture=True)
     print(f"Published https://github.com/{REPO}/releases/tag/{tag}")
 
 

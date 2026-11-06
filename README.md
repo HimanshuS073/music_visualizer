@@ -7,6 +7,12 @@ The desktop app uses Lua with LÖVE for the window, Python and yt-dlp for search
 and mpv for playback. There's also an Android version with touch controls.
 Both have a cover background and audio bars that follow the music.
 
+The desktop source has a warm dark interface, mint playback buttons, a centered
+cover, thumbnail search cards, and a playback progress strip. It adapts to
+resizable windows on Linux and Windows. Hover near the bottom to reveal the
+controls; they stay visible while paused. Press S to search and Space to pause.
+Existing packaged desktop downloads still use the earlier interface until rebuilt.
+
 Songs stream without being saved as music files. Cover images and the video
 frames used for bar colors stay in memory too.
 

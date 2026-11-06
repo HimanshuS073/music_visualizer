@@ -73,7 +73,7 @@ local function panel_layout()
     local w = love.graphics.getWidth()
     local width = math.min(440, w - 32)
     -- Moving the bars shouldn't move the search results.
-    local bottom = visualizer_layout().top - (84 - controls_offset) - 16
+    local bottom = love.graphics.getHeight() - 104
     return {x=w - width - 20, y=70, width=width, height=math.max(208, bottom - 70)}
 end
 
@@ -293,11 +293,11 @@ local function receive(reply)
 end
 
 function love.load()
-    love.window.setTitle("Music room")
+    love.window.setTitle("Music Room")
     local window = config.window or {}
     love.window.setMode(bounded(window.width, 1080, 720, 3840), bounded(window.height, 680, 480, 2160),
                        {resizable=true, minwidth=720, minheight=480, highdpi=true, vsync=1})
-    love.graphics.setBackgroundColor(0.045, 0.055, 0.075)
+    love.graphics.setBackgroundColor(0.065, 0.057, 0.077)
     love.graphics.setDefaultFilter("linear", "linear")
     fonts.title = love.graphics.newFont(25)
     fonts.body = love.graphics.newFont(14)
@@ -332,7 +332,7 @@ function love.load()
 end
 
 function love.update(dt)
-    local target = controls_hovered() and 84 or 0
+    local target = (controls_hovered() or not selected_song or paused) and 84 or 0
     -- Keep the slide speed consistent at different frame rates.
     controls_offset = controls_offset + (target - controls_offset) * (1 - math.exp(-14 * dt))
     if math.abs(target - controls_offset) < .05 then controls_offset = target end
@@ -506,9 +506,17 @@ local function fitted(text, width, font)
 end
 
 local function button(text, x, y, width, height)
-    love.graphics.setColor(0.13, 0.16, 0.21, 0.97)
-    love.graphics.rectangle("fill", x, y, width, height, 6)
-    love.graphics.setColor(0.88, 0.91, 0.95)
+    local mx, my = love.mouse.getPosition()
+    local hovered = love.window.hasMouseFocus() and inside(mx, my, x, y, width, height)
+    local primary = text == "Play" or text == "Pause" or text == "Search"
+    if primary then
+        love.graphics.setColor(hovered and .81 or .72, .88, .80)
+    else
+        love.graphics.setColor(hovered and .22 or .15, hovered and .22 or .14, hovered and .26 or .18)
+    end
+    love.graphics.rectangle("fill", x, y, width, height, 12)
+    if primary then love.graphics.setColor(.08, .12, .10)
+    else love.graphics.setColor(.96, .94, .91) end
     love.graphics.setFont(fonts.body)
     love.graphics.printf(text, x, y + (height - fonts.body:getHeight()) / 2, width, "center")
 end
@@ -516,8 +524,8 @@ end
 function draw_input_box()
     if not panel_open then return end
     local p = panel_layout()
-    love.graphics.setColor(0.055, 0.07, 0.10, 0.96)
-    love.graphics.rectangle("fill", p.x, p.y, p.width, p.height, 10)
+    love.graphics.setColor(0.10, 0.09, 0.12, 0.98)
+    love.graphics.rectangle("fill", p.x, p.y, p.width, p.height, 18)
     love.graphics.setFont(fonts.body)
     love.graphics.setColor(0.9, 0.94, 0.97)
     love.graphics.print("Find a song", p.x + 16, p.y + 17)
@@ -543,8 +551,12 @@ function draw_input_box()
         local song = results[index]
         if not song then break end
         local y = list_y + row * RESULT_HEIGHT
+        if index ~= selected_result then
+            love.graphics.setColor(.13, .12, .15, .95)
+            love.graphics.rectangle("fill", p.x + 10, y, p.width - 20, RESULT_HEIGHT - 4, 9)
+        end
         if index == selected_result then
-            love.graphics.setColor(0.12, 0.30, 0.30, 0.95)
+            love.graphics.setColor(0.19, 0.28, 0.25, 0.95)
             love.graphics.rectangle("fill", p.x + 10, y, p.width - 20, RESULT_HEIGHT - 4, 5)
         end
         love.graphics.setColor(0.63, 0.73, 0.77)
@@ -578,37 +590,52 @@ local function draw_background()
 end
 
 local function draw_heading()
-    local w = love.graphics.getWidth()
-    local text_width = panel_open and math.max(180, panel_layout().x - 64) or w - 56
+    local w, h = love.graphics.getDimensions()
     love.graphics.setFont(fonts.small)
-    love.graphics.setColor(0.40, 0.77, 0.73)
-    love.graphics.print("MUSIC", 28, 20)
+    love.graphics.setColor(.72, .88, .80)
+    love.graphics.print("YOUR LISTENING ROOM", 28, 20)
     button("Search · S", w - 130, 18, 110, 34)
 
-    if selected_song and not song_name_hovered(text_width) then return end
-
-    love.graphics.setFont(fonts.title)
-    love.graphics.setColor(0.94, 0.96, 0.98)
-    local title = selected_song and selected_song.title or "Find a song you love"
-    local _, lines = fonts.title:getWrap(title, text_width)
-    title = lines[1] or title
-    if lines[2] then
-        local second = lines[2]
-        if lines[3] then second = fitted(second .. " …", text_width, fonts.title) end
-        title = title .. "\n" .. second
+    local available = panel_open and panel_layout().x - 48 or w - 56
+    local center = 28 + available / 2
+    local art_size = math.max(100, math.min(280, available - 40, h - 290))
+    local art_y = 100
+    love.graphics.setColor(.11, .10, .14, .94)
+    love.graphics.rectangle("fill", center - art_size / 2 - 8, art_y - 8,
+                            art_size + 16, art_size + 16, 20)
+    if cover_image then
+        local iw, ih = cover_image:getDimensions()
+        local scale = math.min(art_size / iw, art_size / ih)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.draw(cover_image, center - iw * scale / 2,
+                           art_y + (art_size - ih * scale) / 2, 0, scale, scale)
+    else
+        love.graphics.setColor(.72, .88, .80, .8)
+        love.graphics.setLineWidth(3)
+        love.graphics.arc("line", "open", center, art_y + art_size * .50,
+                          art_size * .23, math.pi, math.pi * 2)
+        love.graphics.rectangle("fill", center - art_size * .26, art_y + art_size * .48,
+                                art_size * .08, art_size * .20, 5)
+        love.graphics.rectangle("fill", center + art_size * .18, art_y + art_size * .48,
+                                art_size * .08, art_size * .20, 5)
+        love.graphics.setLineWidth(1)
     end
-    love.graphics.printf(title, 28, 115, text_width)
-    love.graphics.setFont(fonts.body)
-    love.graphics.setColor(0.64, 0.72, 0.77)
-    local artist = selected_song and (selected_song.channel or "") or "Press S to search YouTube."
-    love.graphics.print(fitted(artist, text_width, fonts.body), 28, 88)
-
-    love.graphics.setFont(fonts.small)
-    if cover_message ~= "" then
-        love.graphics.print(fitted(cover_message, text_width, fonts.small), 28, 184)
-    end
-    if visualizer.reason and playback_running and visualizer.settings.enabled then
-        love.graphics.print(fitted("FFT: " .. visualizer.reason, text_width, fonts.small), 28, 202)
+    local show_title = not selected_song or song_name_hovered(available)
+    if show_title then
+        local title_y = art_y + art_size + 26
+        love.graphics.setFont(fonts.title)
+        love.graphics.setColor(.97, .95, .92)
+        love.graphics.printf(fitted(selected_song and selected_song.title or "Find your next favorite",
+                                   available, fonts.title), 28, title_y, available, "center")
+        love.graphics.setFont(fonts.body)
+        love.graphics.setColor(.67, .63, .71)
+        love.graphics.printf(fitted(selected_song and (selected_song.channel or "") or
+                             "Press S to search. Pick a song and settle in.", available, fonts.body),
+                             28, title_y + 36, available, "center")
+        local message = cover_message
+        if visualizer.reason and playback_running then message = "FFT: " .. visualizer.reason end
+        love.graphics.setFont(fonts.small)
+        love.graphics.printf(fitted(message, available, fonts.small), 28, title_y + 60, available, "center")
     end
 end
 
@@ -619,10 +646,12 @@ local function draw_visualizer()
 end
 
 local function draw_controls()
-    if not controls_hovered() then return end
+    if controls_offset < .1 then return end
     local w, h = love.graphics.getDimensions()
-    love.graphics.setColor(0.045, 0.06, 0.085, 0.96)
-    love.graphics.rectangle("fill", 16, h - 84, w - 32, 70, 8)
+    love.graphics.push("all")
+    love.graphics.translate(0, 84 - controls_offset)
+    love.graphics.setColor(0.10, 0.09, 0.12, 0.98)
+    love.graphics.rectangle("fill", 16, h - 84, w - 32, 70, 16)
     love.graphics.setFont(fonts.small)
     love.graphics.setColor(0.8, 0.86, 0.90)
     local title = selected_song and selected_song.title or "Nothing playing"
@@ -631,11 +660,17 @@ local function draw_controls()
     love.graphics.setColor(0.5, 0.62, 0.69)
     love.graphics.print(fitted(player_message, label_width, fonts.small), 28, h - 45)
     button("-10s", w / 2 - 116, h - 66, 66, 44)
-    button(paused and "Play" or "Pause", w / 2 - 42, h - 66, 84, 44)
+    button((paused or not selected_song) and "Play" or "Pause", w / 2 - 42, h - 66, 84, 44)
     button("+10s", w / 2 + 50, h - 66, 66, 44)
     love.graphics.setFont(fonts.small)
     love.graphics.setColor(0.6, 0.7, 0.75)
     love.graphics.printf(time_text(position) .. " / " .. time_text(duration), w - 175, h - 57, 145, "right")
+    local progress = duration and duration > 0 and math.max(0, math.min(1, position / duration)) or 0
+    love.graphics.setColor(.23, .21, .27)
+    love.graphics.rectangle("fill", 30, h - 20, w - 60, 3, 2)
+    love.graphics.setColor(.72, .88, .80)
+    love.graphics.rectangle("fill", 30, h - 20, (w - 60) * progress, 3, 2)
+    love.graphics.pop()
 end
 
 local function frame_limit()

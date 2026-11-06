@@ -48,7 +48,11 @@ class PlaybackServiceTest {
             shadowOf(android.os.Looper.getMainLooper()).idle()
             service.player.setMediaItem(MediaItem.fromUri("https://example.invalid/test.mp3"))
             service.player.playWhenReady = true
+            val power = service.getSystemService(android.os.PowerManager::class.java)
+            shadowOf(power).setIsInteractive(false)
+            service.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF))
             window.pause().stop()
+            assertFalse(power.isInteractive)
             assertTrue(service.player.playWhenReady)
             assertEquals(1, service.player.mediaItemCount)
             assertTrue(service.player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_VIDEO))
@@ -89,14 +93,46 @@ class PlaybackServiceTest {
         val controller = Robolectric.buildService(PlaybackService::class.java).create()
         val service = controller.get()
         try {
+            val preparation = PlaybackService::class.java.getDeclaredField("preparationLock")
+                .apply { isAccessible = true }.get(service) as StreamPreparationLock
+            preparation.acquire()
+            val lock = StreamPreparationLock::class.java.getDeclaredField("lock")
+                .apply { isAccessible = true }.get(preparation) as android.os.PowerManager.WakeLock
+            assertTrue(lock.isHeld)
             service.player.setMediaItem(MediaItem.fromUri("https://example.invalid/test.mp3"))
             service.player.playWhenReady = true
             service.onTaskRemoved(null)
+            assertFalse(lock.isHeld)
             assertFalse(service.player.playWhenReady)
             assertFalse(service.desiredPlaying)
             assertEquals(0, service.player.mediaItemCount)
             assertTrue(shadowOf(service).isStoppedBySelf)
             assertEquals(android.app.Service.START_NOT_STICKY, service.onStartCommand(null, 0, 1))
         } finally { controller.destroy() }
+    }
+
+    @Test fun pausingDuringLoadingAndDestroyingServiceReleasePreparationLock() {
+        val controller = Robolectric.buildService(PlaybackService::class.java).create()
+        val service = controller.get()
+        fun setField(name: String, value: Any) {
+            PlaybackService::class.java.getDeclaredField(name).apply { isAccessible = true }.set(service, value)
+        }
+        val preparation = PlaybackService::class.java.getDeclaredField("preparationLock")
+            .apply { isAccessible = true }.get(service) as StreamPreparationLock
+        val lock = StreamPreparationLock::class.java.getDeclaredField("lock")
+            .apply { isAccessible = true }.get(preparation) as android.os.PowerManager.WakeLock
+        try {
+            setField("song", Song("Song", "Artist", "https://example.invalid/song", 120, "", ""))
+            setField("loading", true)
+            setField("desiredPlaying", true)
+            preparation.acquire()
+            service.toggle()
+            assertFalse(service.desiredPlaying)
+            assertFalse(lock.isHeld)
+            service.toggle()
+            assertTrue(service.desiredPlaying)
+            assertTrue(lock.isHeld)
+        } finally { controller.destroy() }
+        assertFalse(lock.isHeld)
     }
 }

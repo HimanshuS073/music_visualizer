@@ -29,8 +29,11 @@ FFT samples come from the player's audio, and bar colors come from decoded video
 frames. No microphone permission is needed. Songs and images aren't saved to
 disk. Thumbnail memory is capped at 2 MiB; image downloads at 4 MiB each.
 
-Music keeps playing when you switch apps or lock the screen. A media playback
-service owns the player, with pause/resume and seek controls in Android's media
+Music keeps playing when you switch apps or lock the screen. The display can
+stay completely off. A short CPU wake lock covers stream loading (up to two
+minutes); ExoPlayer manages CPU and Wi-Fi locks during playback and releases
+them when paused or stopped. A media playback service owns the player, with
+pause/resume and seek controls in Android's media
 notification. Returning to Music Room reconnects to the same track and position.
 Swiping Music Room away from Recents or force-stopping it stops playback; it
 doesn't restart itself. A track also stops when it finishes, and Android may
@@ -88,7 +91,7 @@ Then run:
 ```
 
 The result is `app/build/outputs/apk/debug/app-debug.apk`. Local checked copies
-are kept in `releases/`; GitHub installers use names such as `music-room-v8.apk`.
+are kept in `releases/`; GitHub installers use names such as `music-room-v9.apk`.
 The number in the filename is Android's version code, not its display version.
 
 The application ID is `local.music.kotlinplayer`, so it can be installed beside
@@ -101,7 +104,7 @@ an installation signed with the original key.
 ## App updates
 
 Install the latest Music Room APK from the
-[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.7).
+[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.8).
 Earlier APKs don't contain the updater.
 
 On launch, Music Room checks public GitHub releases in the background. When a
@@ -126,7 +129,7 @@ playing. Pending installer permissions survive normal activity recreation.
 
 The updater looks through the 100 most recent releases, ignores drafts and
 prereleases, and only accepts Android tags like `android-v1.3` with assets named
-`music-room-v8.apk`. Desktop releases don't affect it. The asset must include
+`music-room-v9.apk`. Desktop releases don't affect it. The asset must include
 GitHub's SHA-256 digest. It selects the highest newer version code.
 
 ## Publishing the next Android update
@@ -174,8 +177,8 @@ To also check live YouTube search, thumbnails and a small stream range in memory
 ```
 
 The tests cover FFT signals, invalid data, HTTP cancellation and image size
-limits. Robolectric checks service ownership, backgrounding the window and
-removing the task on simulated API 28. Robolectric is a test dependency and is
+limits. Robolectric checks service ownership, screen-off/window lifecycle,
+stream-loading wake locks, and removing the task on simulated API 28. Robolectric is a test dependency and is
 not included in the APK. Real-device audio, notifications and screen-lock behavior
 still need phone testing. See `TEST_REPORT.md` for this build's results.
 

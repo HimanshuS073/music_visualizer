@@ -51,6 +51,7 @@ class PlaybackService : MediaSessionService() {
     private var closed = false
     private var session: MediaSession? = null
     private val samples = SampleRelay()
+    private lateinit var preparationLock: StreamPreparationLock
     lateinit var player: ExoPlayer
         private set
     var song: Song? = null
@@ -64,6 +65,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        preparationLock = StreamPreparationLock(this)
         val renderers = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
                                         enableAudioTrackPlaybackParams: Boolean): AudioSink =
@@ -75,7 +77,7 @@ class PlaybackService : MediaSessionService() {
         player.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
         player.setHandleAudioBecomingNoisy(true)
-        player.setWakeMode(C.WAKE_MODE_LOCAL)
+        player.setWakeMode(C.WAKE_MODE_NETWORK)
         player.addListener(object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (!loading) desiredPlaying = playWhenReady
@@ -117,6 +119,7 @@ class PlaybackService : MediaSessionService() {
         val request = ++version
         job.cancel()
         task?.cancel(true)
+        preparationLock.release()
         job = MusicSearch.Job()
         val requestJob = job
         loading = true
@@ -134,6 +137,7 @@ class PlaybackService : MediaSessionService() {
             .setContentTitle(selected.title).setContentText("Loading music…")
             .setContentIntent(openPlayer()).setStyle(Notification.MediaStyle().setMediaSession(session!!.platformToken))
             .setOngoing(true).setOnlyAlertOnce(true).build())
+        preparationLock.acquire()
         task = resolver.submit {
             try {
                 val stream = MusicSearch.resolve(selected, requestJob)
@@ -151,12 +155,14 @@ class PlaybackService : MediaSessionService() {
                         loading = false
                         player.playWhenReady = desiredPlaying
                         player.prepare()
+                        preparationLock.release()
                     }
                 }
             } catch (error: Exception) {
                 ui.post {
                     if (!closed && request == version) {
                         loading = false
+                        preparationLock.release()
                         desiredPlaying = false
                         errorMessage = "Cannot load this song: ${error.message}"
                         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -170,6 +176,9 @@ class PlaybackService : MediaSessionService() {
     fun toggle() {
         if (song == null) return
         desiredPlaying = if (loading) !desiredPlaying else !player.playWhenReady
+        if (loading) {
+            if (desiredPlaying) preparationLock.acquire() else preparationLock.release()
+        }
         if (desiredPlaying && player.playbackState == Player.STATE_ENDED) player.seekTo(0)
         if (!loading) player.playWhenReady = desiredPlaying
     }
@@ -181,6 +190,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        preparationLock.release()
         version++
         job.cancel()
         task?.cancel(true)
@@ -194,6 +204,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        preparationLock.release()
         closed = true
         version++
         job.cancel()

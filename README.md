@@ -122,8 +122,9 @@ without the visualizer; press F5 after fixing the audio connection.
 
 ## Packaged versions
 
-These local test builds include recommendations. The installers are generated
-files, so a fresh clone contains the source.
+Get the Linux and Windows installers from the [desktop release](https://github.com/HimanshuS073/music_visualizer/releases/tag/v0.2.0).
+The [Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.9) includes the Music Room APK.
+If you build locally, look for these files:
 
 | Platform | Local file | Requirements |
 | --- | --- | --- |
@@ -179,9 +180,8 @@ Windows hardware.
 
 ### Android — Music Room
 
-Music Room 1.9 is available as a local test APK. The published
-[Music Room 1.8 release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.8)
-is the previous version.
+Download [Music Room 1.9](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.9)
+or use **Settings → Check updates** in the installed app.
 
 In 1.9, long-press a search result to queue it. **Next** shows the title and
 artist, and **Skip** dismisses a suggestion. When a track ends, the player checks

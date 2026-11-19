@@ -207,3 +207,27 @@ No Android device was connected (`adb devices` returned an empty list). UI layou
 touch interactions, animations, Media3 decoding/audio output, FFT drawing, Android
 lifecycle behavior, and installation/update on a phone still need device testing.
 The host-JVM checks do not establish those behaviors. No emulator was used.
+
+## Cross-platform recommendation handoff
+
+- **Linux native:** The portable launcher passed its runtime checks. In LÖVE,
+  mocked search selected Old Town Road by video ID `r7qovpFAGrQ`. The live
+  recommender ranked INDUSTRY BABY (`UTHLKHL_whs`) first and the window drew its
+  title. After a seek near the end, real mpv reached EOF and the GUI started
+  the suggested stream. Its playback position advanced.
+- **Windows under Wine:** The rebuilt self-extractor unpacked successfully.
+  The extracted LÖVE executable used Windows pipes and bundled Python and mpv.
+  With mocked YouTube results and a local WAV, the exact seed ID was logged,
+  the next title was drawn, and real mpv EOF started the suggested ID.
+- **Desktop automated tests:** Six Python tests and two Lua checks passed,
+  including queue priority, recorded feedback, stale replies, and network
+  failure. Native Windows and live YouTube playback on Windows are untested.
+- **Android:** The launcher activity binds the Media3 playback service. The
+  service fetches related videos from the exact ID, exposes its next track to
+  the activity, and advances the manual queue before suggestions. No Android
+  phone or emulator was connected for installation or live playback.
+  Robolectric passed both recommendation tests with mocked stream resolution
+  and related-video responses, covering the exact seed, the Next label, manual
+  queue priority, recommendation handoff, and stale replies. The Android suite
+  had 57 passes and one opt-in live test skipped. The local 1.9 APK passed
+  signature and alignment verification.

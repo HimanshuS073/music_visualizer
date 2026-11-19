@@ -7,26 +7,15 @@ The desktop app uses Lua with LÖVE for the window, Python and yt-dlp for search
 and mpv for playback. There's also an Android version with touch controls.
 Both have a cover background and audio bars that follow the music.
 
-The desktop source has a warm dark interface, mint playback buttons, a centered
-cover, thumbnail search cards, and a playback progress strip. It adapts to
-resizable windows on Linux and Windows. Hover near the bottom to reveal the
-controls; they stay visible while paused. Press S to search and Space to pause.
-Existing packaged desktop downloads still use the earlier interface until rebuilt.
+On desktop, press **S** to search and **Space** to pause. Move the mouse to the
+bottom to see the playback controls and the next song.
 
 Songs stream without being saved as music files. Cover images and the video
 frames used for bar colors stay in memory too.
 
 ## Demo video
 
-A demo video hasn't been added yet.
-
-
-
 https://github.com/user-attachments/assets/10e519cb-7d65-467b-b470-79dcf37dc91c
-
-
-
-
 
 ## Run it on Linux
 
@@ -77,6 +66,29 @@ adds space below the bars in either position.
 The playback buttons at the bottom work with the mouse too. Closing the window
 stops the music and its background processes.
 
+## Recommendations and the queue
+
+Install the recommender into the same Python environment as yt-dlp. On Linux
+with the system dependencies above and [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv venv --system-site-packages .venv
+uv pip install --python .venv/bin/python 'ytmusicapi==1.12.4'
+MUSIC_PYTHON="$PWD/.venv/bin/python" ./music-player
+```
+
+The **Next** label shows the first manually queued song or the highest-ranked
+suggestion. Right-click a search result or press **Shift+Enter** to queue it.
+**Skip** or **N** dismisses the next recommendation and leaves the current song
+playing. **Delete** skips a recommendation that's already playing. A search
+that you don't select and a song started by autoplay don't train the listener.
+
+The `recommendations` section in `config.lua` controls discovery, autoplay, and
+optional KNN refinement. The manual queue plays first even with recommendation
+autoplay off. History and the radio cache are stored locally in
+`data/next_song_bandit/`. Set `MUSIC_RECOMMENDER_DATA` to use a different folder.
+The standalone `python music_recommender.py --help` interface is still available.
+
 ## Change the visualizer
 
 Edit `config.lua`, save it, and press **F5** in the player. You can change the
@@ -110,20 +122,20 @@ without the visualizer; press F5 after fixing the audio connection.
 
 ## Packaged versions
 
-The finished builds are kept locally in `dist/`. They aren't committed to this
-repository, so cloning it gives you the source, not the installers.
+These local test builds include recommendations. The installers are generated
+files, so a fresh clone contains the source.
 
-| Platform | File | Requirements |
+| Platform | Local file | Requirements |
 | --- | --- | --- |
-| Linux | `music-player-linux-x86_64.run` | x86-64 Linux with graphics and PipeWire/PulseAudio |
-| Windows | `music-player-windows-x64.exe` | Windows 10/11, 64-bit |
-| Android (Music Room) | `music-room-v9.apk` in the Android release | Android 8.0 or newer |
+| Linux | `dist/music-player-linux-recommendations.run` | x86-64 Linux with graphics and PipeWire/PulseAudio |
+| Windows | `dist/music-player-windows-recommendations.exe` | Windows 10/11, 64-bit |
+| Android | `kotlin_music_player/releases/music-room-v10.apk` | Android 8.0 or newer |
 
 These builds include their app dependencies. You still need internet access,
 working graphics drivers, and an audio output. Linux also uses your existing
 PipeWire/PulseAudio service.
 
-The Linux package was tested on CachyOS and in Ubuntu 24.04 and Debian 13
+An earlier Linux package was tested on CachyOS and in Ubuntu 24.04 and Debian 13
 Distrobox containers. Both containers passed bundled runtime checks, window
 startup, the JSON API, live search, thumbnails, playback, pause/resume, seeking,
 searching while a song plays, switching tracks, live FFT capture, and video colors.
@@ -137,21 +149,21 @@ These results don't replace testing on separate installations. Read
 For the Linux build:
 
 ```bash
-chmod +x dist/music-player-linux-x86_64.run
-./dist/music-player-linux-x86_64.run
+chmod +x dist/music-player-linux-recommendations.run
+./dist/music-player-linux-recommendations.run
 ```
 
 Use `--check` to check its bundled runtimes. To keep an unpacked copy for editing:
 
 ```bash
-./dist/music-player-linux-x86_64.run --extract "$HOME/music-player-portable"
+./dist/music-player-linux-recommendations.run --extract "$HOME/music-player-portable"
 "$HOME/music-player-portable/AppRun"
 ```
 
 On Windows, open the `.exe`. To unpack it from PowerShell:
 
 ```powershell
-.\music-player-windows-x64.exe --extract "$HOME\MusicPlayerPortable"
+.\music-player-windows-recommendations.exe --extract "$HOME\MusicPlayerPortable"
 & "$HOME\MusicPlayerPortable\music-player-app.exe"
 ```
 
@@ -167,9 +179,14 @@ Windows hardware.
 
 ### Android — Music Room
 
-Download the APK from [Music Room 1.8](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.8).
-It supports Android 8 and newer. Install it once over the earlier **Kotlin** app
-to get the updater. The older Java Android app is a separate application.
+Music Room 1.9 is available as a local test APK. The published
+[Music Room 1.8 release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.8)
+is the previous version.
+
+In 1.9, long-press a search result to queue it. **Next** shows the title and
+artist, and **Skip** dismisses a suggestion. When a track ends, the player checks
+the manual queue first. Android keeps recommendation feedback for the playback
+service session.
 
 Search for a song and tap a result. The list hides until you search again, leaving
 the listening area clear. Music keeps playing when you switch apps or
@@ -189,6 +206,14 @@ files remain private. The app uses native Android views, Media3 and NewPipe;
 it needs no Python, mpv or Termux. Automated checks are documented in
 [the Android test report](kotlin_music_player/TEST_REPORT.md). Real phone playback
 and installer testing are still needed. The APK is a personal debug-signed build.
+
+## Recommendation checks
+
+Live YouTube playback and automatic handoff passed on Linux. The Windows
+build passed the same handoff check under Wine with mocked YouTube results
+and local audio. Android passed the simulated service and queue tests.
+Native Windows and live Android playback still need device testing.
+See [TEST_REPORT.md](TEST_REPORT.md) for details.
 
 ## Terminal player
 

@@ -1,7 +1,6 @@
 -- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
--- FFT bars with colors from the video.
 local ffi = require("ffi")
 local spectrum = {}
 local methods = {}
@@ -61,7 +60,6 @@ function methods:configure(config)
     self.targets, self.heights = ffi.new('double[?]', count), ffi.new('double[?]', count)
     self.velocities = ffi.new('double[?]', count)
     self.low_bins, self.high_bins = {}, {}
-    -- These FFT values only change when the settings change.
     for i = 0, n - 1 do
         local bits, reversed, value = n, 0, i
         while bits > 1 do
@@ -220,7 +218,6 @@ function methods:choose_colors(keep_colors)
     if #palette == 0 then palette = {{.38, .72, .69}, {.48, .65, .78}, {.67, .64, .77}} end
     self.palette = palette
     if keep_colors then return end
-    -- Shuffle again when F5 reloads the settings.
     local random = love and love.math and love.math.random or math.random
     self.seed = (self.seed + random(1, 2147483646)) % 2147483646 + 1
     local seed = self.seed
@@ -298,7 +295,6 @@ function methods:set_video_palette(reply)
     if unchanged then return end
     local keep_colors = #self.candidates > 0 and self.settings.color_mode == "random"
     self.candidates, self.frame_sequence = colors, reply.sequence
-    -- The timer decides when the new palette reaches the bars.
     self:choose_colors(keep_colors)
 end
 

@@ -1,7 +1,6 @@
 -- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
--- JSON connection to the Python player.
 local ffi = require("ffi")
 local AF_UNIX, SOCK_STREAM = 1, 1
 local NONBLOCKING, NO_SIGNAL, TRY_AGAIN = 0x40, 0x4000, 11
@@ -174,7 +173,6 @@ function client:send(command, fields)
 end
 
 function client:flush()
-    -- Keep unsent bytes for the next poll.
     while #self.output > 0 do
         local sent
         if self.windows then sent=self.windows:write(self.output)

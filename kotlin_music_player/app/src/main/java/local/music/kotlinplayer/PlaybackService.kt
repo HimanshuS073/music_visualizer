@@ -44,6 +44,18 @@ class PlaybackService : MediaSessionService() {
     inner class LocalBinder : Binder() { val service get() = this@PlaybackService }
     private val binder = LocalBinder()
     private val ui = Handler(Looper.getMainLooper())
+    private val recommendations = Recommendations()
+    private val radio = Executors.newSingleThreadExecutor()
+    private val radioCache = android.util.LruCache<String, List<Song>>(32)
+    private var radioJob = MusicSearch.Job()
+    private var radioTask: Future<*>? = null
+    private val manualQueue = ArrayDeque<Song>()
+    private val suggestions = ArrayDeque<Song>()
+    private var finished = false
+    val nextSong: Song? get() = manualQueue.firstOrNull() ?: suggestions.firstOrNull()
+    val canSkipSuggestion: Boolean get() = manualQueue.isEmpty() && suggestions.isNotEmpty()
+    internal var relatedVideos: (String, MusicSearch.Job) -> List<Song> = MusicSearch::related
+    internal var resolveStream: (Song, MusicSearch.Job) -> SongStream = MusicSearch::resolve
     private val resolver = Executors.newSingleThreadExecutor()
     private var task: Future<*>? = null
     private var job = MusicSearch.Job()
@@ -83,7 +95,9 @@ class PlaybackService : MediaSessionService() {
                 if (!loading) desiredPlaying = playWhenReady
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) desiredPlaying = false
+                if (playbackState == Player.STATE_ENDED) {
+                    trackEnded()
+                }
             }
             override fun onPlayerError(error: PlaybackException) {
                 desiredPlaying = false
@@ -115,8 +129,77 @@ class PlaybackService : MediaSessionService() {
     }
 
     fun select(selected: Song) {
+        song?.let { recommendations.feedback(it, selected, 1.0) }
+        startTrack(selected)
+    }
+
+    fun enqueue(selected: Song) {
+        val current = song
+        if (current == null) {
+            startTrack(selected)
+            return
+        }
+        recommendations.feedback(current, selected, 1.0)
+        manualQueue.addLast(selected)
+        advance()
+    }
+
+    fun skipSuggestion() {
+        if (!canSkipSuggestion) return
+        val source = song ?: return
+        recommendations.feedback(source, suggestions.removeFirst(), -0.35)
+    }
+
+    internal fun trackEnded() {
+        desiredPlaying = false
+        finished = true
+        val endedVersion = version
+        ui.post { if (version == endedVersion) advance() }
+    }
+
+    private fun advance() {
+        if (closed || !finished) return
+        val next = manualQueue.removeFirstOrNull() ?: suggestions.removeFirstOrNull() ?: return
+        startTrack(next, userInitiated = false)
+    }
+
+    private fun discover(seed: Song, request: Int) {
+        val id = seed.videoId ?: return
+        val requestJob = radioJob
+        fun apply(candidates: List<Song>) {
+            if (closed || request != version) return
+            suggestions.addAll(recommendations.rank(seed, candidates))
+            advance()
+        }
+        val cached = radioCache.get(id)
+        if (cached != null) {
+            apply(cached)
+            return
+        }
+        radioTask = radio.submit {
+            val candidates = try { relatedVideos(id, requestJob) } catch (_: Exception) { emptyList() }
+            ui.post {
+                if (!closed && request == version && !requestJob.cancelled) {
+                    if (candidates.isNotEmpty()) radioCache.put(id, candidates)
+                    apply(candidates)
+                }
+            }
+        }
+    }
+
+    private fun cancelDiscovery() {
+        radioJob.cancel()
+        radioTask?.cancel(true)
+        suggestions.clear()
+    }
+
+    private fun startTrack(selected: Song, userInitiated: Boolean = true) {
         if (closed) return
         val request = ++version
+        finished = false
+        cancelDiscovery()
+        radioJob = MusicSearch.Job()
+        recommendations.started(selected)
         job.cancel()
         task?.cancel(true)
         preparationLock.release()
@@ -129,7 +212,7 @@ class PlaybackService : MediaSessionService() {
         player.stop()
         player.clearMediaItems()
         // Promote before resolving, so switching apps during a slow request is safe.
-        startForegroundService(Intent(this, PlaybackService::class.java).setAction(KEEP_ALIVE))
+        if (userInitiated) startForegroundService(Intent(this, PlaybackService::class.java).setAction(KEEP_ALIVE))
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL, "Music playback", NotificationManager.IMPORTANCE_LOW))
         startForeground(NOTIFICATION_ID, Notification.Builder(this, CHANNEL)
@@ -140,7 +223,7 @@ class PlaybackService : MediaSessionService() {
         preparationLock.acquire()
         task = resolver.submit {
             try {
-                val stream = MusicSearch.resolve(selected, requestJob)
+                val stream = resolveStream(selected, requestJob)
                 ui.post {
                     if (!closed && request == version) {
                         val metadata = MediaMetadata.Builder().setTitle(selected.title).setArtist(selected.artist).build()
@@ -156,6 +239,7 @@ class PlaybackService : MediaSessionService() {
                         player.playWhenReady = desiredPlaying
                         player.prepare()
                         preparationLock.release()
+                        discover(selected, request)
                     }
                 }
             } catch (error: Exception) {
@@ -179,7 +263,10 @@ class PlaybackService : MediaSessionService() {
         if (loading) {
             if (desiredPlaying) preparationLock.acquire() else preparationLock.release()
         }
-        if (desiredPlaying && player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+        if (desiredPlaying && player.playbackState == Player.STATE_ENDED) {
+            finished = false
+            player.seekTo(0)
+        }
         if (!loading) player.playWhenReady = desiredPlaying
     }
 
@@ -190,6 +277,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        cancelDiscovery()
+        manualQueue.clear()
+        finished = false
         preparationLock.release()
         version++
         job.cancel()
@@ -204,6 +294,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        cancelDiscovery()
+        radio.shutdownNow()
         preparationLock.release()
         closed = true
         version++

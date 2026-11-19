@@ -34,6 +34,11 @@ return {
         color_mode = "per_song", -- "random" uses the timer; "per_song" follows palette changes.
         color_change_speed = 10, -- Changes per second in random mode (0.1–144).
     },
+    recommendations = {
+        enabled = true,
+        autoplay = true,
+        knn = false, -- Refine the first suggestions with cached radio neighbors.
+    },
     background = {
         enabled = true,
         max_width = 1280,      -- Smaller uses less GPU memory for the blur.

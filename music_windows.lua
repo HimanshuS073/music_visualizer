@@ -1,7 +1,6 @@
 -- SPDX-FileCopyrightText: 2026 Himanshu_Sharma (HimanshuS073)
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
--- Windows pipe connection to Python.
 local ffi = require('ffi')
 ffi.cdef[[
 typedef void * HANDLE;

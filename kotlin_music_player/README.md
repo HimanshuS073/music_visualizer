@@ -213,3 +213,15 @@ The app's code uses GPL-3.0-or-later. Dependencies retain their own licenses;
 copies are bundled under `app/src/main/assets/licenses/`.
 
 Background playback follows [Android’s MediaSessionService guide](https://developer.android.com/media/media3/session/background-playback).
+
+## Recommendations
+
+The playback controls show the next song and its artist. Long-press a search
+result to add it to the manual queue. The service checks that queue first when
+the current song ends, then uses its highest-ranked recommendation. **Skip**
+dismisses the shown recommendation.
+
+NewPipe fetches related videos using the current YouTube video ID. Android
+uses the desktop fast scoring formula in Kotlin and filters related videos by
+studio or official-video title markers. Recommendation feedback and cache are
+held in the playback service for the current session.

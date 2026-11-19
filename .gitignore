@@ -46,3 +46,6 @@ local.properties
 *.apk
 *.aab
 *.idsig
+
+# Local recommendation history and radio cache.
+/data/next_song_bandit/

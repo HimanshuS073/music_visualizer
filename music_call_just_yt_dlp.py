@@ -15,7 +15,6 @@ import queue
 if os.name != "nt":
     import termios
 else:
-    # The Windows bundle keeps its tools beside Python.
     from pathlib import Path
     tools = Path(__file__).resolve().parent.parent / "runtime" / "bin"
     os.environ["PATH"] = str(tools) + os.pathsep + os.environ.get("PATH", "")
@@ -32,6 +31,8 @@ from python_code_music import (
     get_video_palette,
 )
 from python_code_music.playback import exit_on_signal
+from python_code_music.recommendations import RecommendationTask
+from music_recommender import resolve_seed
 
 
 
@@ -166,7 +167,6 @@ class Keyboard:
         self.fd = sys.stdin.fileno()
         self.previous = None
         self.pending = ""
-        # Song names can contain multi-byte characters.
         self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
         self.escape = None
 
@@ -196,7 +196,6 @@ class Keyboard:
         while self.pending:
             key = self.pending[0]
             self.pending = self.pending[1:]
-            # Ignore terminal replies and escape sequences.
             if self.escape == "start":
                 if key == "[" or key == "O":
                     self.escape = "csi"
@@ -417,6 +416,7 @@ def song_info(song):
     return {"title": song.get("title") or "Unknown title", "video_id": song["id"],
             "url": f"https://www.youtube.com/watch?v={song['id']}",
             "channel": song.get("channel") or song.get("uploader"),
+            "artist": song.get("artist") or song.get("creator") or song.get("channel") or song.get("uploader"),
             "duration": duration, "thumbnail": thumbnail_url(song)}
 
 
@@ -435,7 +435,8 @@ def selected_song(request, results):
     for song in results:
         if song["id"] == video_id:
             return song
-    return {"id": video_id, "title": video_id}
+    return {"id": video_id, "title": request.get("title") or video_id,
+            "artist": request.get("artist")}
 
 
 def handle_request(request, player, results):
@@ -558,6 +559,7 @@ def run_api():
     search = SearchTask(raise_errors=True)
     images = ImageTask()
     previews = ImageTask()
+    recommendations = RecommendationTask()
     results = []
     pending_search = None
     pending_image = None
@@ -580,6 +582,8 @@ def run_api():
         for signum in dict.fromkeys((signal.SIGTERM, getattr(signal, "SIGHUP", signal.SIGTERM))):
             handlers[signum] = signal.signal(signum, exit_on_signal)
         while True:
+            for completed_request, payload, error in recommendations.poll():
+                reply(completed_request, payload, error=error)
             preview_result = previews.get_result()
             if preview_result is not None and pending_preview is not None:
                 video_id, image, error = preview_result
@@ -641,6 +645,29 @@ def run_api():
                         results = []
                         search.start(query.strip())
                         pending_search = request
+                    elif request.get("command") == "recommend":
+                        if request.get("video_id"):
+                            selected_song(request, [])
+                        elif not request.get("title"):
+                            raise ValueError("Provide a recommendation seed.")
+                        request["title"] = request.get("title") or request["video_id"]
+                        request["excluded"] = request.get("exclude", "").split(",")
+                        cancelled_id = recommendations.generation
+                        if cancelled_id is not None:
+                            reply({"id": cancelled_id}, {"recommendations": [], "done": True})
+                        recommendations.start(request)
+                    elif request.get("command") == "recommend_feedback":
+                        action = request.get("action")
+                        if action not in ("skip", "choice"):
+                            raise ValueError("Unknown recommendation action.")
+                        track = selected_song(request, [])
+                        source = selected_song({"video_id": request.get("source_id"),
+                                                "title": request.get("source_title"),
+                                                "artist": request.get("source_artist")}, [])
+                        recommendations.feedback(
+                            resolve_seed(None, source["id"], source["title"], source["artist"]),
+                            resolve_seed(None, track["id"], track["title"], track["artist"]), action)
+                        reply(request)
                     elif request.get("command") == "preview":
                         song = selected_song(request, results)
                         if pending_preview is not None:
@@ -654,6 +681,11 @@ def run_api():
                         images.start(song)
                         pending_image = request
                     else:
+                        if request.get("command") in ("play", "stop"):
+                            cancelled_id = recommendations.generation
+                            recommendations.cancel()
+                            if cancelled_id is not None:
+                                reply({"id": cancelled_id}, {"recommendations": [], "done": True})
                         reply(request, handle_request(request, player, results))
                         if request.get("command") == "quit":
                             return 0
@@ -670,6 +702,7 @@ def run_api():
         print(str(error), file=sys.stderr)
         return 1
     finally:
+        recommendations.close()
         images.stop()
         previews.stop()
         search.stop()

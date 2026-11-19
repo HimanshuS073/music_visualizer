@@ -77,14 +77,23 @@ object MusicSearch {
         if (name.isBlank()) return@withJob emptyList()
         val extractor = ServiceList.YouTube.getSearchExtractor(name.trim())
         extractor.fetchPage()
-        extractor.initialPage.items.filterIsInstance<StreamInfoItem>().take(20).map { item ->
-            val images = item.thumbnails
-            val cover = images.maxByOrNull { it.width }?.url.orEmpty()
-            val preview = images.filter { it.width > 0 }.minByOrNull { kotlin.math.abs(it.width - 240) }?.url
-                ?: images.firstOrNull()?.url.orEmpty()
-            Song(item.name ?: "Untitled", item.uploaderName ?: "Unknown channel", item.url,
-                item.duration, cover, preview)
-        }
+        extractor.initialPage.items.filterIsInstance<StreamInfoItem>().take(20).map(::toSong)
+    }
+
+    private fun toSong(item: StreamInfoItem): Song {
+        val images = item.thumbnails
+        val cover = images.maxByOrNull { it.width }?.url.orEmpty()
+        val preview = images.filter { it.width > 0 }.minByOrNull { kotlin.math.abs(it.width - 240) }?.url
+            ?: images.firstOrNull()?.url.orEmpty()
+        return Song(item.name ?: "Untitled", item.uploaderName ?: "Unknown channel", item.url,
+            item.duration, cover, preview)
+    }
+
+    fun related(videoId: String, job: Job): List<Song> = withJob(job) {
+        val extractor = ServiceList.YouTube.getStreamExtractor("https://www.youtube.com/watch?v=$videoId")
+        extractor.fetchPage()
+        extractor.relatedItems?.items.orEmpty().filterIsInstance<StreamInfoItem>()
+            .filter { it.duration > 0 }.map(::toSong)
     }
 
     fun resolve(song: Song, job: Job = Job()): SongStream = withJob(job) {

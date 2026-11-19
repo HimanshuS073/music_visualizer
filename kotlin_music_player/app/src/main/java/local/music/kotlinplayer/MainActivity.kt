@@ -61,15 +61,9 @@ class MainActivity : Activity() {
             playback = service
             player = service.player
             connectPlayer()
-            service.song?.let { song ->
-                playingUrl = song.url
-                trackTitle.text = song.title
-                screen.trackArtist.text = song.artist
-                screen.setTrackAvailable(true)
-                if (!restoredScreenState && !searching && songs.isEmpty()) screen.setResultsHidden(true)
-                loadCover(song, ++playVersion)
-                adapter.notifyDataSetChanged()
-            }
+            syncTrack()
+            if (service.song != null && !restoredScreenState && !searching && songs.isEmpty())
+                screen.setResultsHidden(true)
             if (active) attachPlayback()
         }
         override fun onServiceDisconnected(name: ComponentName) {
@@ -102,6 +96,7 @@ class MainActivity : Activity() {
         override fun run() {
             if (closed || !active) return
             if (!::player.isInitialized || playback == null) { ui.postDelayed(this, 100); return }
+            syncTrack()
             screen.setPlaying(playback?.desiredPlaying == true)
             if (!searching) {
                 playback?.errorMessage?.let { message.text = it }
@@ -192,6 +187,20 @@ class MainActivity : Activity() {
         adapter = ResultsAdapter()
         screen.list.adapter = adapter
         screen.list.setOnItemClickListener { _, _, index, _ -> select(index) }
+        screen.list.setOnItemLongClickListener { _, _, index, _ ->
+            val song = songs.getOrNull(index) ?: return@setOnItemLongClickListener false
+            val service = playback ?: return@setOnItemLongClickListener false
+            service.enqueue(song)
+            syncTrack()
+            hideKeyboard()
+            showControls()
+            true
+        }
+        screen.skipSuggestion.setOnClickListener {
+            playback?.skipSuggestion()
+            syncTrack()
+            showControls()
+        }
         playbackArea.contentDescription = "Show playback controls"
         playbackArea.setOnClickListener { showControls() }
         controls.setOnClickListener { showControls() }
@@ -250,26 +259,32 @@ class MainActivity : Activity() {
 
     private fun select(index: Int) {
         val song = songs.getOrNull(index) ?: return
-        val version = ++playVersion
         val service = playback ?: run { message.text = "Playback is still connecting. Try again."; return }
-        coverJob.cancel()
         service.select(song)
         screen.setResultsHidden(true)
         imageJob.cancel()
         images.queue.clear()
         pendingImages.clear()
-        spectrum.reset()
-        screen.setPlaying(true)
+        syncTrack()
+        hideKeyboard()
+        showControls()
+    }
+
+    private fun syncTrack() {
+        val service = playback ?: return
+        screen.setNext(service.nextSong, service.canSkipSuggestion)
+        val song = service.song ?: return
+        if (playingUrl == song.url) return
         playingUrl = song.url
+        spectrum.reset()
+        screen.setPlaying(service.desiredPlaying)
         trackTitle.text = song.title
         screen.trackArtist.text = song.artist
         screen.setTrackAvailable(true)
         screen.updateTimeline(0, song.duration * 1000, false)
-        message.text = "Loading stream…"
+        if (!searching && service.loading) message.text = "Loading stream…"
         adapter.notifyDataSetChanged()
-        hideKeyboard()
-        showControls()
-        loadCover(song, version)
+        loadCover(song, ++playVersion)
     }
 
     private fun loadCover(song: Song, version: Int) {

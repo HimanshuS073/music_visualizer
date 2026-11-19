@@ -35,9 +35,11 @@ def backward_song(player, seconds=10):
 
 def get_status(player):
     process = player["player"]
-    running = process is not None and process.poll() is None
+    exit_code = process.poll() if process is not None else None
+    running = process is not None and exit_code is None
     status = {
         "running": running,
+        "ended": process is not None and exit_code == 0 and not player["cancelled"].is_set(),
         "ready": False,
         "song": player["song"],
         "error": player["error"],

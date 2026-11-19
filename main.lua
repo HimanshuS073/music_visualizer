@@ -5,6 +5,7 @@ local utf8 = require("utf8")
 local music_backend = require("music_backend")
 local Spectrum = require("spectrum")
 local config = require("config")
+local tracks = require("music_queue").new()
 
 song_name = ""
 selected_song = nil
@@ -53,7 +54,6 @@ local function controls_hovered()
     if not love.window.hasMouseFocus() then return false end
     local x, y = love.mouse.getPosition()
     local w, h = love.graphics.getDimensions()
-    -- Leave a small hover area above the buttons.
     return x >= 0 and x <= w and y >= h - 100 and y <= h
 end
 
@@ -62,7 +62,7 @@ local function visualizer_layout()
     local baseline = h - controls_offset - visualizer.settings.bottom_gap
     local height = 0
     if selected_song and visualizer.settings.enabled then
-        -- Keep bar height the same with controls shown or hidden.
+        -- Size the bars against the space available with controls visible.
         height = math.min(visualizer.settings.height,
                           math.max(32, h - 84 - visualizer.settings.bottom_gap - 300))
     end
@@ -180,11 +180,21 @@ local function rebuild_background()
     background = first
 end
 
-local function select_song(index)
-    local song = results[index]
-    if not song then return end
-    selected_result = index
+local function artist_of(song)
+    return song.artist or song.channel or ""
+end
+
+local function feedback(source, song, action)
+    if not source or source.video_id == song.video_id then return end
+    request("recommend_feedback", {source_id=source.video_id, source_title=source.title,
+            source_artist=artist_of(source), video_id=song.video_id, title=song.title,
+            artist=artist_of(song), action=action}, "recommend_feedback")
+end
+
+local function start_song(song, source)
+    tracks:start(song, source)
     selected_song = song
+    status_request = nil
     position, duration, paused = 0, song.duration, false
     playback_running = true
     visualizer:reset(song.video_id)
@@ -194,25 +204,68 @@ local function select_song(index)
     cover_message = "Loading cover…"
     release(cover_image); cover_image = nil
     release(background); background = nil
-    latest_play = request("play", {video_id=song.video_id, spectrum=visualizer.settings.enabled,
+    latest_play = request("play", {video_id=song.video_id, title=song.title, artist=artist_of(song),
+                                  spectrum=visualizer.settings.enabled,
                                   video_colors=visualizer.settings.enabled and visualizer.settings.color_source == "video",
                                   video_color_fps=visualizer.settings.video_color_fps,
                                   fft_size=visualizer.settings.fft_size,
                                   sample_rate=visualizer.settings.sample_rate}, "play")
     latest_image = request("image", {video_id=song.video_id}, "image")
+end
+
+local function advance_queue()
+    local song, source = tracks:advance((config.recommendations or {}).autoplay ~= false)
+    if song then start_song(song, source) end
+end
+
+local function select_song(index, enqueue)
+    local song = results[index]
+    if not song then return end
+    selected_result = index
+    feedback(tracks.choice_source or tracks.current, song, "choice")
     close_input_box()
+    if enqueue and tracks.current then
+        table.insert(tracks.manual, song)
+        advance_queue()
+    else
+        start_song(song)
+    end
+end
+
+local function skip_suggestion()
+    local suggestion = tracks:skip_suggestion()
+    if suggestion then feedback(tracks.current, suggestion, "skip") end
+end
+
+local function skip_playing()
+    if not tracks.source or tracks.ended then return end
+    feedback(tracks.source, tracks.current, "skip")
+    local source = tracks.source
+    tracks.ended = true
+    advance_queue()
+    tracks.choice_source = source
+    if tracks.ended then
+        request("stop")
+        playback_running = false
+        player_message = "Recommendation skipped"
+    end
 end
 
 local function receive(reply)
     local kind = pending[reply.id]
-    pending[reply.id] = nil
-    if kind == "search" then
+    if kind ~= "recommend" or not reply.ok or reply.done then pending[reply.id] = nil end
+    if kind == "recommend" then
+        if tracks:accept(reply.id, reply.ok and reply.recommendations or nil,
+                         not reply.ok or reply.done) then advance_queue() end
+    elseif kind == "recommend_feedback" then
+        if not reply.ok then print("Could not save recommendation feedback: " .. tostring(reply.error)) end
+    elseif kind == "search" then
         if reply.id ~= latest_search then return end
         if not reply.ok then search_message = reply.error; return end
         results = reply.results or {}
         selected_result, first_result = 1, 1
         search_message = #results == 0 and "No songs found. Try another name." or
-                         tostring(#results) .. " results · click a song or use Up/Down and Enter"
+                         tostring(#results) .. " results · Enter to play · Shift+Enter to queue"
     elseif kind == "preview" then
         if reply.id ~= preview_request then return end
         preview_request = nil
@@ -231,7 +284,16 @@ local function receive(reply)
     elseif kind == "play" then
         if reply.id ~= latest_play then return end
         player_message = reply.ok and "Loading audio…" or reply.error
-        if reply.ok then status_timer = .75 else playback_running = false end
+        if reply.ok then
+            status_timer = .75
+            local settings = config.recommendations or {}
+            if settings.enabled ~= false then
+                tracks.request = request("recommend", {video_id=selected_song.video_id,
+                    title=selected_song.title, artist=artist_of(selected_song),
+                    exclude=table.concat(tracks.recent, ","), knn=settings.knn == true}, "recommend")
+                tracks.waiting = tracks.request ~= nil
+            end
+        else playback_running = false end
     elseif kind == "image" then
         if reply.id ~= latest_image then return end
         if not reply.ok then cover_message = "Cover unavailable: " .. tostring(reply.error); return end
@@ -267,9 +329,9 @@ local function receive(reply)
             if reply.available and not paused then player_message = "Playing" end
         else visualizer:feed({available=false, reason=reply.error}) end
     elseif kind == "status" then
+        if reply.id ~= status_request then return end
         status_request = nil
         if not reply.ok then return end
-        -- Ignore status replies from the previous track.
         if not selected_song or not reply.song or reply.song.video_id ~= selected_song.video_id then return end
         paused = reply.paused or false
         playback_running = reply.running or false
@@ -277,8 +339,13 @@ local function receive(reply)
         duration = reply.duration or selected_song.duration
         if reply.error then player_message = reply.error
         elseif reply.ready then player_message = paused and "Paused" or "Playing"
-        elseif not reply.running then player_message = "Playback ended"
+        elseif reply.ended then player_message = "Playback ended"
+        elseif not reply.running then player_message = "Playback stopped"
         else player_message = "Loading audio…" end
+        if reply.ended and not tracks.ended then
+            tracks.ended = true
+            advance_queue()
+        end
     elseif kind == "toggle" then
         if reply.ok then
             paused = reply.message == "Paused."
@@ -333,7 +400,6 @@ end
 
 function love.update(dt)
     local target = (controls_hovered() or not selected_song or paused) and 84 or 0
-    -- Keep the slide speed consistent at different frame rates.
     controls_offset = controls_offset + (target - controls_offset) * (1 - math.exp(-14 * dt))
     if math.abs(target - controls_offset) < .05 then controls_offset = target end
     if backend and backend.fd then
@@ -347,7 +413,6 @@ function love.update(dt)
     end
     status_timer = status_timer + dt
     if panel_open and not preview_request then
-        -- Load visible thumbnails first, one at a time.
         for offset = 0, #results - 1 do
             local index = (first_result - 1 + offset) % #results + 1
             local song = results[index]
@@ -368,7 +433,6 @@ function love.update(dt)
     if not love.window.hasFocus() then rate = math.min(rate, 30) end
     if selected_song and playback_running and not paused and visualizer.settings.enabled and not spectrum_request
        and love.graphics.isActive() and spectrum_timer >= 1 / rate then
-        -- Carry leftover time into the next frame.
         spectrum_timer = math.min(spectrum_timer - 1 / rate, 1 / rate)
         spectrum_request = request("spectrum", {sequence=visualizer.sequence}, "spectrum")
     end
@@ -436,7 +500,10 @@ function love.keypressed(key)
             selected_result = math.max(1, math.min(#results, selected_result + step))
             keep_selection_visible()
         end
-    elseif panel_open and (key == "return" or key == "kpenter") then select_song(selected_result)
+    elseif panel_open and (key == "return" or key == "kpenter") then
+        select_song(selected_result, love.keyboard.isDown("lshift", "rshift"))
+    elseif key == "n" then skip_suggestion()
+    elseif key == "delete" then skip_playing()
     elseif key == "space" and selected_song then request("toggle")
     elseif key == "right" and selected_song then request("forward", {seconds=10})
     elseif key == "left" and selected_song then request("backward", {seconds=10})
@@ -455,13 +522,16 @@ local function song_name_hovered(width)
 end
 
 function love.mousepressed(x, y, button)
-    if button ~= 1 then return end
+    if button ~= 1 and button ~= 2 then return end
     local w, h = love.graphics.getDimensions()
-    if inside(x, y, w - 130, 18, 110, 34) then open_input_box(); return end
-    if selected_song and controls_hovered() and y >= h - 66 and y <= h - 22 then
-        if inside(x, y, w / 2 - 116, h - 66, 66, 44) then request("backward", {seconds=10}); return end
-        if inside(x, y, w / 2 - 42, h - 66, 84, 44) then request("toggle"); return end
-        if inside(x, y, w / 2 + 50, h - 66, 66, 44) then request("forward", {seconds=10}); return end
+    if button == 1 and inside(x, y, w - 130, 18, 110, 34) then open_input_box(); return end
+    if button == 1 and selected_song and controls_offset > .1 then
+        local shift = 84 - controls_offset
+        if inside(x, y, w / 2 - 116, h - 66 + shift, 66, 44) then request("backward", {seconds=10}); return end
+        if inside(x, y, w / 2 - 42, h - 66 + shift, 84, 44) then request("toggle"); return end
+        if inside(x, y, w / 2 + 50, h - 66 + shift, 66, 44) then request("forward", {seconds=10}); return end
+        if #tracks.manual == 0 and tracks.suggestions[1]
+           and inside(x, y, w - 92, h - 49 + shift, 62, 22) then skip_suggestion(); return end
     end
     if not panel_open then return end
     local p = panel_layout()
@@ -470,7 +540,7 @@ function love.mousepressed(x, y, button)
     local list_y = p.y + RESULTS_TOP
     if inside(x, y, p.x + 10, list_y, p.width - 20, visible_rows() * RESULT_HEIGHT) then
         local index = first_result + math.floor((y - list_y) / RESULT_HEIGHT)
-        if results[index] then select_song(index) end
+        if results[index] then select_song(index, button == 2) end
     elseif not inside(x, y, p.x, p.y, p.width, p.height) then close_input_box() end
 end
 
@@ -486,7 +556,6 @@ end
 
 function love.resize()
     keep_selection_visible()
-    -- Wait briefly before rebuilding the background during a resize.
     background_dirty = true
 end
 
@@ -656,15 +725,23 @@ local function draw_controls()
     love.graphics.setColor(0.8, 0.86, 0.90)
     local title = selected_song and selected_song.title or "Nothing playing"
     local label_width = math.max(90, w / 2 - 170)
-    love.graphics.print(fitted(title, label_width, fonts.small), 28, h - 68)
+    love.graphics.print(fitted(title, label_width, fonts.small), 28, h - 73)
     love.graphics.setColor(0.5, 0.62, 0.69)
-    love.graphics.print(fitted(player_message, label_width, fonts.small), 28, h - 45)
+    local next_song = tracks:next()
+    if next_song and (playback_running or tracks.ended) then
+        love.graphics.print(fitted("Next: " .. next_song.title, label_width, fonts.small), 28, h - 54)
+        love.graphics.print(fitted(artist_of(next_song), label_width, fonts.small), 28, h - 38)
+    else
+        local detail = tracks.waiting and playback_running and "Finding recommendations…" or player_message
+        love.graphics.print(fitted(detail, label_width, fonts.small), 28, h - 48)
+    end
     button("-10s", w / 2 - 116, h - 66, 66, 44)
     button((paused or not selected_song) and "Play" or "Pause", w / 2 - 42, h - 66, 84, 44)
     button("+10s", w / 2 + 50, h - 66, 66, 44)
     love.graphics.setFont(fonts.small)
     love.graphics.setColor(0.6, 0.7, 0.75)
-    love.graphics.printf(time_text(position) .. " / " .. time_text(duration), w - 175, h - 57, 145, "right")
+    love.graphics.printf(time_text(position) .. " / " .. time_text(duration), w - 175, h - 68, 145, "right")
+    if #tracks.manual == 0 and tracks.suggestions[1] then button("Skip", w - 92, h - 49, 62, 22) end
     local progress = duration and duration > 0 and math.max(0, math.min(1, position / duration)) or 0
     love.graphics.setColor(.23, .21, .27)
     love.graphics.rectangle("fill", 30, h - 20, w - 60, 3, 2)

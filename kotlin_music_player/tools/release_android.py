@@ -16,7 +16,6 @@ import tempfile
 
 PROJECT = Path(__file__).resolve().parents[1]
 REPO = "HimanshuS073/music_visualizer"
-# Public certificate fingerprint, not a private signing key.
 CERTIFICATE = "66632e468fffb4d0a2d0c6a802abafe4fc6cb514f95ef896a1737a7c79f9f02f"
 
 
@@ -62,7 +61,7 @@ def main():
         print("Ready locally. Commit the source, then run this command with --publish to release it.")
         return
     commit = run("git", "rev-parse", "HEAD", capture=True).strip()
-    # Upload into a draft, then check GitHub's digest before anyone can install it.
+    # Verify the uploaded checksum before publishing.
     with tempfile.TemporaryDirectory(prefix="music-room-release-") as directory:
         notes = Path(directory) / "notes.md"
         notes.write_text(f"Music Room {name} for Android 8 and newer.\n\n"

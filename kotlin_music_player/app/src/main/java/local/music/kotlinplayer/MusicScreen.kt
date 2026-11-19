@@ -44,6 +44,16 @@ class MusicScreen(
     val trackArtist = text("Pick a song and settle in.", 12, RoomStyle.muted)
     val pause = RoomIconButton(activity, RoomIcon.PLAY, "Play", RoomStyle.mint, RoomStyle.background) { onInteraction(); onToggle() }
     val seekBar = SeekBar(activity)
+    private val nextTitle = text("", 12, RoomStyle.muted)
+    val skipSuggestion = android.widget.Button(activity).apply {
+        text = "Skip"
+        contentDescription = "Skip next recommendation"
+        minimumHeight = 0
+        minHeight = 0
+    }
+    private val nextRow = LinearLayout(activity).apply { gravity = Gravity.CENTER_VERTICAL }
+    private var displayedNext: Song? = null
+    private var displayedSkip = false
     private val back = RoomIconButton(activity, RoomIcon.BACK, "Back 10 seconds") { onInteraction(); onSeek(-10000) }
     private val forward = RoomIconButton(activity, RoomIcon.FORWARD, "Forward 10 seconds") { onInteraction(); onSeek(10000) }
     private val elapsed = text("0:00", 10, RoomStyle.muted)
@@ -216,6 +226,12 @@ class MusicScreen(
         })
         track.addView(pause, vertical(54, 54))
         controls.addView(track)
+        nextTitle.maxLines = 2
+        nextTitle.ellipsize = TextUtils.TruncateAt.END
+        nextRow.addView(nextTitle, LinearLayout.LayoutParams(0, -2, 1f))
+        nextRow.addView(skipSuggestion, vertical(-2, 48))
+        nextRow.visibility = View.GONE
+        controls.addView(nextRow, vertical(-1, -2, top = 4))
         val transport = LinearLayout(activity).apply { gravity = Gravity.CENTER_VERTICAL }
         transport.addView(back, vertical(48, 48))
         seekBar.apply {
@@ -349,6 +365,15 @@ class MusicScreen(
         emptyHint.text = "Check your connection, then search again."
         loading.visibility = View.GONE
     }
+    fun setNext(song: Song?, canSkip: Boolean) {
+        if (displayedNext == song && displayedSkip == canSkip) return
+        displayedNext = song
+        displayedSkip = canSkip
+        nextTitle.text = song?.let { "Next: ${it.title} · ${it.artist}" }.orEmpty()
+        nextRow.visibility = if (song == null) View.GONE else View.VISIBLE
+        skipSuggestion.visibility = if (canSkip) View.VISIBLE else View.GONE
+    }
+
     fun setTrackAvailable(value: Boolean) {
         listOf(pause, back, forward).forEach { it.isEnabled = value; it.alpha = if (value) 1f else .4f }
     }

@@ -151,9 +151,13 @@ class RecommendationPlaybackTest {
         try {
             service.resolveStream = { _, _ -> SongStream("asset:///mock-track.mp3") }
             service.relatedVideos = { _, _ -> listOf(first, recommended, recommended) }
+            val searches = java.util.concurrent.atomic.AtomicInteger()
             service.searchRecommendations = { _, _ ->
-                listOf(first, recommended) + (1..25).map {
-                    song("track" + it.toString().padStart(6, '0'), "Track $it (Official Video)", "Fixture Artist")
+                val round = searches.getAndIncrement()
+                listOf(first, recommended) + (1..7).map {
+                    val number = round * 7 + it
+                    song("track" + number.toString().padStart(6, '0'),
+                        "Track $number (Official Video)", "FixtureArtistVEVO")
                 }
             }
             service.select(first)
@@ -161,6 +165,7 @@ class RecommendationPlaybackTest {
             val ids = service.suggestedSongs().map { it.videoId }
             assertEquals(20, ids.distinct().size)
             assertFalse(first.videoId in ids)
+            assertEquals(3, searches.get())
             assertEquals(recommended, service.nextSong)
         } finally { controller.destroy() }
     }

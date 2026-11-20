@@ -13,6 +13,7 @@ selected_song = nil
 local backend
 local pending = {}
 local panel_open = false
+local suggestions_open = false
 local input_focused = false
 local input_text = ""
 local results = {}
@@ -77,15 +78,23 @@ local function panel_layout()
     return {x=w - width - 20, y=70, width=width, height=math.max(208, bottom - 70)}
 end
 
+local function panel_results()
+    return suggestions_open and tracks.suggestions or results
+end
+
+local function results_top()
+    return suggestions_open and 90 or RESULTS_TOP
+end
+
 local function visible_rows()
-    return math.max(1, math.floor((panel_layout().height - RESULTS_TOP - 12) / RESULT_HEIGHT))
+    return math.max(1, math.floor((panel_layout().height - results_top() - 12) / RESULT_HEIGHT))
 end
 
 local function keep_selection_visible()
     local rows = visible_rows()
     if selected_result < first_result then first_result = selected_result end
     if selected_result >= first_result + rows then first_result = selected_result - rows + 1 end
-    first_result = math.max(1, math.min(first_result, math.max(1, #results - rows + 1)))
+    first_result = math.max(1, math.min(first_result, math.max(1, #panel_results() - rows + 1)))
 end
 
 local function set_input_focus(value)
@@ -94,13 +103,21 @@ local function set_input_focus(value)
 end
 
 function open_input_box()
+    suggestions_open = false
     panel_open = true
     input_text = ""
     set_input_focus(true)
 end
 
+local function open_suggestions()
+    if not selected_song then return end
+    suggestions_open, panel_open = true, true
+    selected_result, first_result = 1, 1
+    set_input_focus(false)
+end
+
 local function close_input_box()
-    panel_open = false
+    panel_open, suggestions_open = false, false
     set_input_focus(false)
 end
 
@@ -193,6 +210,7 @@ end
 
 local function start_song(song, source)
     tracks:start(song, source)
+    if suggestions_open then selected_result, first_result = 1, 1 end
     selected_song = song
     status_request = nil
     position, duration, paused = 0, song.duration, false
@@ -219,7 +237,7 @@ local function advance_queue()
 end
 
 local function select_song(index, enqueue)
-    local song = results[index]
+    local song = panel_results()[index]
     if not song then return end
     selected_result = index
     feedback(tracks.choice_source or tracks.current, song, "choice")
@@ -256,7 +274,13 @@ local function receive(reply)
     if kind ~= "recommend" or not reply.ok or reply.done then pending[reply.id] = nil end
     if kind == "recommend" then
         if tracks:accept(reply.id, reply.ok and reply.recommendations or nil,
-                         not reply.ok or reply.done) then advance_queue() end
+                         not reply.ok or reply.done) then
+            if suggestions_open then
+                selected_result = math.max(1, math.min(selected_result, #tracks.suggestions))
+                keep_selection_visible()
+            end
+            advance_queue()
+        end
     elseif kind == "recommend_feedback" then
         if not reply.ok then print("Could not save recommendation feedback: " .. tostring(reply.error)) end
     elseif kind == "search" then
@@ -290,7 +314,7 @@ local function receive(reply)
             if settings.enabled ~= false then
                 tracks.request = request("recommend", {video_id=selected_song.video_id,
                     title=selected_song.title, artist=artist_of(selected_song),
-                    exclude=table.concat(tracks.recent, ","), knn=settings.knn == true}, "recommend")
+                    exclude=table.concat(tracks.recent, ","), fill=true, knn=settings.knn == true}, "recommend")
                 tracks.waiting = tracks.request ~= nil
             end
         else playback_running = false end
@@ -412,7 +436,7 @@ function love.update(dt)
         end
     end
     status_timer = status_timer + dt
-    if panel_open and not preview_request then
+    if panel_open and not suggestions_open and not preview_request then
         for offset = 0, #results - 1 do
             local index = (first_result - 1 + offset) % #results + 1
             local song = results[index]
@@ -494,10 +518,12 @@ function love.keypressed(key)
         elseif key == "tab" then set_input_focus(false) end
         return
     end
+    if key == "g" then open_suggestions(); return end
+    local songs = panel_results()
     if panel_open and (key == "up" or key == "down") then
-        if #results > 0 then
+        if #songs > 0 then
             local step = key == "down" and 1 or -1
-            selected_result = math.max(1, math.min(#results, selected_result + step))
+            selected_result = math.max(1, math.min(#songs, selected_result + step))
             keep_selection_visible()
         end
     elseif panel_open and (key == "return" or key == "kpenter") then
@@ -525,6 +551,7 @@ function love.mousepressed(x, y, button)
     if button ~= 1 and button ~= 2 then return end
     local w, h = love.graphics.getDimensions()
     if button == 1 and inside(x, y, w - 130, 18, 110, 34) then open_input_box(); return end
+    if button == 1 and selected_song and inside(x, y, w - 280, 18, 140, 34) then open_suggestions(); return end
     if button == 1 and selected_song and controls_offset > .1 then
         local shift = 84 - controls_offset
         if inside(x, y, w / 2 - 116, h - 66 + shift, 66, 44) then request("backward", {seconds=10}); return end
@@ -535,12 +562,12 @@ function love.mousepressed(x, y, button)
     end
     if not panel_open then return end
     local p = panel_layout()
-    if inside(x, y, p.x + 14, p.y + 48, p.width - 108, 40) then set_input_focus(true); return end
-    if inside(x, y, p.x + p.width - 86, p.y + 48, 72, 40) then submit_search(); return end
-    local list_y = p.y + RESULTS_TOP
+    if not suggestions_open and inside(x, y, p.x + 14, p.y + 48, p.width - 108, 40) then set_input_focus(true); return end
+    if not suggestions_open and inside(x, y, p.x + p.width - 86, p.y + 48, 72, 40) then submit_search(); return end
+    local list_y = p.y + results_top()
     if inside(x, y, p.x + 10, list_y, p.width - 20, visible_rows() * RESULT_HEIGHT) then
         local index = first_result + math.floor((y - list_y) / RESULT_HEIGHT)
-        if results[index] then select_song(index, button == 2) end
+        if panel_results()[index] then select_song(index, button == 2) end
     elseif not inside(x, y, p.x, p.y, p.width, p.height) then close_input_box() end
 end
 
@@ -550,7 +577,7 @@ function love.wheelmoved(_, amount)
     local p = panel_layout()
     if inside(x, y, p.x, p.y, p.width, p.height) then
         local step = amount > 0 and math.max(1, math.floor(amount)) or math.min(-1, math.ceil(amount))
-        first_result = math.max(1, math.min(math.max(1, #results - visible_rows() + 1), first_result - step))
+        first_result = math.max(1, math.min(math.max(1, #panel_results() - visible_rows() + 1), first_result - step))
     end
 end
 
@@ -597,7 +624,14 @@ function draw_input_box()
     love.graphics.rectangle("fill", p.x, p.y, p.width, p.height, 18)
     love.graphics.setFont(fonts.body)
     love.graphics.setColor(0.9, 0.94, 0.97)
-    love.graphics.print("Find a song", p.x + 16, p.y + 17)
+    love.graphics.print(suggestions_open and "Suggested songs" or "Find a song", p.x + 16, p.y + 17)
+    if suggestions_open then
+        love.graphics.setFont(fonts.small)
+        love.graphics.setColor(.57, .66, .73)
+        local message = tostring(#tracks.suggestions) .. " suggestions"
+        if tracks.waiting then message = message .. " · Finding more…" end
+        love.graphics.print(message, p.x + 16, p.y + 58)
+    else
     love.graphics.setColor(0.025, 0.035, 0.055)
     love.graphics.rectangle("fill", p.x + 14, p.y + 48, p.width - 108, 40, 5)
     love.graphics.setColor(input_focused and 0.3 or 0.15, 0.5, 0.5, 0.8)
@@ -614,10 +648,12 @@ function draw_input_box()
     love.graphics.setFont(fonts.small)
     love.graphics.setColor(0.57, 0.66, 0.73)
     love.graphics.printf(search_message, p.x + 16, p.y + 99, p.width - 32)
-    local list_y = p.y + RESULTS_TOP
+    end
+    local list_y = p.y + results_top()
+    local songs = panel_results()
     for row = 0, visible_rows() - 1 do
         local index = first_result + row
-        local song = results[index]
+        local song = songs[index]
         if not song then break end
         local y = list_y + row * RESULT_HEIGHT
         if index ~= selected_result then
@@ -646,7 +682,7 @@ function draw_input_box()
         if lines[2] then love.graphics.print(fitted(lines[2], p.width - 148, fonts.body), p.x + 116, y + 25) end
         love.graphics.setFont(fonts.small)
         love.graphics.setColor(0.59, 0.68, 0.73)
-        love.graphics.print(fitted(song.channel or "Unknown channel", p.width - 194, fonts.small), p.x + 116, y + 46)
+        love.graphics.print(fitted(song.artist or song.channel or "Unknown artist", p.width - 194, fonts.small), p.x + 116, y + 46)
         love.graphics.printf(time_text(song.duration), p.x + p.width - 74, y + 46, 50, "right")
     end
 end
@@ -664,6 +700,7 @@ local function draw_heading()
     love.graphics.setColor(.72, .88, .80)
     love.graphics.print("YOUR LISTENING ROOM", 28, 20)
     button("Search · S", w - 130, 18, 110, 34)
+    if selected_song then button("Suggestions · G", w - 280, 18, 140, 34) end
 
     local available = panel_open and panel_layout().x - 48 or w - 56
     local center = 28 + available / 2

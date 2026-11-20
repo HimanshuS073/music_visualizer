@@ -98,4 +98,19 @@ end_song(C)
 local autoplay, song = last("play")
 assert(autoplay > manual_play and song.video_id == D.video_id)
 assert(last("recommend_feedback") == last_choice)
+deliver(autoplay, {})
+local ranked = {}
+for i = 1, 20 do
+    ranked[i] = {video_id=string.format("track%06d", i), title="Track " .. i, artist="Artist"}
+end
+local recommendation_id, request_fields = last("recommend")
+assert(request_fields.fill == true)
+deliver(recommendation_id, {recommendations=ranked, done=true})
+love.graphics.getWidth = function() return 1080 end
+love.graphics.getHeight = function() return 680 end
+love.keypressed("g")
+for _ = 1, 19 do love.keypressed("down") end
+love.keypressed("return")
+local _, picked = last("play")
+assert(picked.video_id == ranked[20].video_id)
 print("Player recommendation wiring passed.")

@@ -80,6 +80,25 @@ object MusicSearch {
         extractor.initialPage.items.filterIsInstance<StreamInfoItem>().take(20).map(::toSong)
     }
 
+    fun searchSuggestions(query: String, job: Job): List<Song> = withJob(job) {
+        val extractor = ServiceList.YouTube.getSearchExtractor(query)
+        extractor.fetchPage()
+        var page = extractor.initialPage
+        val songs = mutableListOf<Song>()
+        repeat(3) { index ->
+            if (job.cancelled) return@withJob emptyList()
+            songs.addAll(page.items.filterIsInstance<StreamInfoItem>()
+                .filter { it.duration > 0 }.map(::toSong))
+            if (index == 2 || !page.hasNextPage()) return@withJob songs
+            page = try {
+                extractor.getPage(page.nextPage)
+            } catch (_: Exception) {
+                return@withJob songs
+            }
+        }
+        songs
+    }
+
     private fun toSong(item: StreamInfoItem): Song {
         val images = item.thumbnails
         val cover = images.maxByOrNull { it.width }?.url.orEmpty()

@@ -38,6 +38,11 @@ internal fun Song.languageHint(): String? {
     return title.mapNotNull { scripts[Character.UnicodeScript.of(it.code)] }.toSet().singleOrNull()
 }
 
+private val channelSuffix = Regex("""(?:\s*-\s*topic|vevo)$""", RegexOption.IGNORE_CASE)
+
+internal fun Song.artistKey(): String = artist.trim().replace(channelSuffix, "")
+    .lowercase(Locale.ROOT).filter(Char::isLetterOrDigit)
+
 internal class Recommendations {
     private val studio = Regex("\\b(?:official\\s+(?:music\\s+)?video|studio\\s+(?:version|recording))\\b", RegexOption.IGNORE_CASE)
     private val live = Regex("\\b(?:live (?:at|from|session|performance|version|recording|on stage|in concert)|in concert|fancam|fan cam|unplugged|tiny desk|en vivo|ao vivo)\\b|[\\[(|–—-]\\s*live\\b", RegexOption.IGNORE_CASE)
@@ -52,8 +57,9 @@ internal class Recommendations {
     private fun matchesLanguage(seed: Song, language: String?, song: Song): Boolean {
         val candidateLanguage = song.languageHint()
         if (language != null && candidateLanguage != null) return language == candidateLanguage
-        return seed.artist.isNotBlank() && !seed.artist.equals("Unknown channel", ignoreCase = true) &&
-            identity(seed).second == identity(song).second
+        val artist = seed.artistKey()
+        return artist.isNotEmpty() && artist !in setOf("unknownchannel", "unknownartist") &&
+            artist == song.artistKey()
     }
 
     fun started(song: Song) {

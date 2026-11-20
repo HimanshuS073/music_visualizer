@@ -172,8 +172,8 @@ class Radio:
                 seen.add(t["video_id"])
                 songs.add(identity(t))
                 tracks.append(t)
-            return tracks[:20]
-        return self.cached("studio-video-queue-v1:" + seed["video_id"], fetch)
+            return tracks
+        return self.cached("studio-video-queue-v2:" + seed["video_id"], fetch)
 
 
 def features(seed, track, position):
@@ -303,24 +303,52 @@ def resolve_seed(radio, video_id, title, artist):
 
 
 def recommend(radio, listener, video_id=None, title="", artist=None, *,
-              excluded=(), use_knn=False, on_fast=None, cancelled=lambda: False):
+              excluded=(), use_knn=False, fill=False, on_fast=None, cancelled=lambda: False):
     """Return personalized (score, track, features) rows for an exact recording."""
     seed = resolve_seed(radio, video_id, title, artist)
     if not seed or cancelled():
         return []
-    tracks = radio.queue(seed)
+    try:
+        tracks = radio.queue(seed)
+    except Exception:
+        if not fill:
+            raise
+        tracks = []
     if cancelled():
         return []
     fast = personalized(seed, tracks, listener, excluded)
     pending = unverified_choices(seed, listener, tracks, excluded)
-    if not pending and not use_knn:
+    needs_fill = fill and len(fast) < 20
+    if not pending and not use_knn and not needs_fill:
         return fast
     if on_fast:
         on_fast(fast)
     remembered = remembered_choices(radio, pending, cancelled)
     if use_knn and not cancelled():
         tracks = rank({"seed": seed, "recommendations": tracks}, radio.queue, cancelled)
-    return personalized(seed, tracks, listener, excluded, remembered)
+    rows = personalized(seed, tracks, listener, excluded, remembered)
+    if needs_fill:
+        artist = " ".join(seed["artists"])
+        language = language_hint(seed["title"]) or ""
+        if language.endswith("-script") or language in {"devanagari", "cyrillic"}:
+            language = ""
+        queries = [f"{artist} {language}", f"{seed['title']} {artist} {language}",
+                   f"{artist} {language} studio songs", f"{artist} {language} music album"]
+        for query in dict.fromkeys(query.strip() for query in queries):
+            if len(rows) >= 20 or cancelled():
+                break
+            if not query:
+                continue
+            try:
+                more = radio.search(query)
+            except Exception:
+                continue
+            merged = {song["video_id"]: song for song in tracks}
+            for song in more:
+                merged.setdefault(song["video_id"], song)
+            tracks = list(merged.values())
+            rows = personalized(seed, tracks, listener, excluded, remembered)
+    return rows
 
 
 def unverified_choices(seed, listener, queue, excluded):
@@ -451,7 +479,7 @@ def rank(data, fetch, cancelled=lambda: False):
 
 
 def candidates(radio, seed, use_knn):
-    tracks = radio.queue(seed)
+    tracks = radio.queue(seed)[:20]
     if use_knn:
         return rank({"seed": seed, "recommendations": tracks}, radio.queue)
     return tracks

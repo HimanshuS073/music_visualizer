@@ -62,7 +62,7 @@ class PlaybackService : MediaSessionService() {
     }
     val nextSong: Song? get() = manualQueue.firstOrNull() ?: suggestions.firstOrNull()
     fun suggestedSongs(): List<Song> = suggestions.toList()
-    internal var searchRecommendations: (String, MusicSearch.Job) -> List<Song> = MusicSearch::search
+    internal var searchRecommendations: (String, MusicSearch.Job) -> List<Song> = MusicSearch::searchSuggestions
     internal var relatedVideos: (String, MusicSearch.Job) -> List<Song> = MusicSearch::related
     internal var resolveStream: (Song, MusicSearch.Job) -> SongStream = MusicSearch::resolve
     private val resolver = Executors.newSingleThreadExecutor()
@@ -180,11 +180,14 @@ class PlaybackService : MediaSessionService() {
         val id = seed.videoId ?: return
         val requestJob = radioJob
         val language = seed.languageHint()?.takeUnless { it.endsWith("-script") || it in listOf("devanagari", "cyrillic") }.orEmpty()
-        val queries = listOf(
-            "${seed.artist} official music video",
-            "${seed.title} ${seed.artist} official music video",
-            "music similar to ${seed.artist} ${seed.title} official music video",
-        ).map { "$it $language".trim() }.distinct()
+        val artist = seed.artist.replace(Regex("""(?:\s*-\s*topic|vevo)$""", RegexOption.IGNORE_CASE), "").trim()
+        val queries = buildList {
+            add("$artist official music video")
+            add("$artist studio songs")
+            add("$artist album music videos")
+            add("${seed.title} $artist official music video")
+            if (language.isNotEmpty()) add("$language songs official music video")
+        }.distinct()
 
         fun load(fetch: () -> List<Song>, onResult: (List<Song>) -> Unit) {
             radioTask = radio.submit {
@@ -195,10 +198,10 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
-        fun fill(candidates: List<Song>, queryIndex: Int, publishFirst: Boolean) {
+        fun fill(candidates: List<Song>, queryIndex: Int) {
             val ranked = recommendations.rank(seed, candidates)
             val complete = ranked.size >= SUGGESTION_COUNT || queryIndex == queries.size
-            if (publishFirst || complete) {
+            if (ranked != suggestedSongs()) {
                 suggestions.clear()
                 suggestions.addAll(ranked)
                 advance()
@@ -209,13 +212,13 @@ class PlaybackService : MediaSessionService() {
                 return
             }
             load({ searchRecommendations(queries[queryIndex], requestJob) }) { more ->
-                fill((candidates + more).distinctBy { it.videoId ?: it.url }, queryIndex + 1, publishFirst = false)
+                fill((candidates + more).distinctBy { it.videoId ?: it.url }, queryIndex + 1)
             }
         }
 
         val cached = radioCache.get(id)
-        if (cached != null) fill(cached, 0, publishFirst = true)
-        else load({ relatedVideos(id, requestJob) }) { fill(it, 0, publishFirst = true) }
+        if (cached != null) fill(cached, 0)
+        else load({ relatedVideos(id, requestJob) }) { fill(it, 0) }
     }
 
     private fun cancelDiscovery() {

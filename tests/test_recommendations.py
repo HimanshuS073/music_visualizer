@@ -100,6 +100,20 @@ class RecommendationsTest(unittest.TestCase):
         rows = personalized(source, [different, matching, same_artist], listener)
         self.assertEqual([row[1]["video_id"] for row in rows], [B, D])
 
+    def test_short_desktop_queue_searches_for_twenty_eligible_tracks(self):
+        self.api.search = lambda query, **kwargs: [
+            SONGS[B], video("EEEEEEEEEEE", "Wrong (Hindi Song)", "Lil Nas X"),
+            video("FFFFFFFFFFF", "Remix (English Song)", "Lil Nas X"),
+        ] + [video(f"track{n:06d}", f"Song {n} (English Song)", "Another artist")
+             for n in range(25)]
+        task = self.task()
+        self.start(task, 1, A, fill=True)
+        replies = self.collect(task)
+        self.assertEqual(len(replies[0][1]["recommendations"]), 1)
+        ranked = replies[-1][1]["recommendations"]
+        self.assertEqual(len({song["video_id"] for song in ranked}), 20)
+        self.assertFalse({A, "EEEEEEEEEEE", "FFFFFFFFFFF"} & {song["video_id"] for song in ranked})
+
     def test_exact_recording_skip_and_choice_survive_restart(self):
         task = self.task()
         self.start(task, 1, A)

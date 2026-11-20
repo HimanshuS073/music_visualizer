@@ -86,6 +86,7 @@ class RecommendationTask:
                     self.radio_factory(), listener, request.get("video_id"),
                     request["title"], request.get("artist"),
                     excluded=request.get("excluded", []), use_knn=request.get("knn", False),
+                    fill=request.get("fill", False),
                     on_fast=lambda rows: publish(rows, done=False), cancelled=cancelled.is_set,
                 )
                 publish(rows)

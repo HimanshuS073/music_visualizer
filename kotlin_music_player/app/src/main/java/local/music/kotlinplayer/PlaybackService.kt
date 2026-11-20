@@ -52,6 +52,14 @@ class PlaybackService : MediaSessionService() {
     private val manualQueue = ArrayDeque<Song>()
     private val suggestions = ArrayDeque<Song>()
     private var finished = false
+    var waitingForAutoplay = false
+        private set
+    private val autoplay = Runnable {
+        waitingForAutoplay = false
+        if (!closed && finished) {
+            suggestions.removeFirstOrNull()?.let { startTrack(it, userInitiated = false) }
+        }
+    }
     val nextSong: Song? get() = manualQueue.firstOrNull() ?: suggestions.firstOrNull()
     fun suggestedSongs(): List<Song> = suggestions.toList()
     internal var relatedVideos: (String, MusicSearch.Job) -> List<Song> = MusicSearch::related
@@ -153,8 +161,18 @@ class PlaybackService : MediaSessionService() {
 
     private fun advance() {
         if (closed || !finished) return
-        val next = manualQueue.removeFirstOrNull() ?: suggestions.removeFirstOrNull() ?: return
-        startTrack(next, userInitiated = false)
+        val queued = manualQueue.removeFirstOrNull()
+        if (queued != null) {
+            startTrack(queued, userInitiated = false)
+        } else if (suggestions.isNotEmpty() && !waitingForAutoplay) {
+            waitingForAutoplay = true
+            ui.postDelayed(autoplay, 5000L)
+        }
+    }
+
+    private fun cancelAutoplay() {
+        ui.removeCallbacks(autoplay)
+        waitingForAutoplay = false
     }
 
     private fun discover(seed: Song, request: Int) {
@@ -182,6 +200,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun cancelDiscovery() {
+        cancelAutoplay()
         radioJob.cancel()
         radioTask?.cancel(true)
         suggestions.clear()
@@ -253,12 +272,13 @@ class PlaybackService : MediaSessionService() {
 
     fun toggle() {
         if (song == null) return
-        desiredPlaying = if (loading) !desiredPlaying else !player.playWhenReady
+        desiredPlaying = if (loading || finished) !desiredPlaying else !player.playWhenReady
         if (loading) {
             if (desiredPlaying) preparationLock.acquire() else preparationLock.release()
         }
         if (desiredPlaying && player.playbackState == Player.STATE_ENDED) {
             finished = false
+            cancelAutoplay()
             player.seekTo(0)
         }
         if (!loading) player.playWhenReady = desiredPlaying

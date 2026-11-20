@@ -88,6 +88,7 @@ class MainActivity : Activity() {
     private var suggestionsDialog: AlertDialog? = null
     private var suggestionsList: LinearLayout? = null
     private var shownSuggestions: List<Song>? = null
+    private var shownAutoplay = false
     private var videoFps = 8
     private var lastFrame = 0L
 
@@ -394,10 +395,16 @@ class MainActivity : Activity() {
 
     private fun refreshSuggestions() {
         val list = suggestionsList ?: return
-        val songs = playback?.suggestedSongs().orEmpty()
-        if (songs == shownSuggestions) return
+        val service = playback
+        val songs = service?.suggestedSongs().orEmpty()
+        val waiting = service?.waitingForAutoplay == true
+        if (songs == shownSuggestions && waiting == shownAutoplay) return
         shownSuggestions = songs
+        shownAutoplay = waiting
         list.removeAllViews()
+        if (waiting) {
+            list.addView(label("Tap a song, or the first suggestion will play automatically.", 13))
+        }
         if (songs.isEmpty()) {
             list.addView(label("No suggestions yet.", 14))
             return
@@ -409,6 +416,15 @@ class MainActivity : Activity() {
                 setPadding(dp(14), dp(10), dp(14), dp(10))
                 addView(RoomStyle.label(this@MainActivity, "${index + 1}. ${song.title}", 14, medium = true))
                 addView(RoomStyle.label(this@MainActivity, song.artist, 12, RoomStyle.muted))
+                isFocusable = true
+                setOnClickListener {
+                    val playerService = playback ?: return@setOnClickListener
+                    if (song !in playerService.suggestedSongs()) return@setOnClickListener
+                    playerService.select(song)
+                    suggestionsDialog?.dismiss()
+                    syncTrack()
+                    showControls()
+                }
             }
             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }

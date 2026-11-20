@@ -57,7 +57,13 @@ class RecommendationPlaybackTest {
             service.trackEnded()
             await { service.song == manual && service.nextSong == afterManual }
             service.trackEnded()
-            await { service.song == afterManual }
+            val looper = shadowOf(Looper.getMainLooper())
+            looper.idle()
+            assertTrue(service.waitingForAutoplay)
+            looper.idleFor(4999, TimeUnit.MILLISECONDS)
+            assertEquals(manual, service.song)
+            looper.idleFor(1, TimeUnit.MILLISECONDS)
+            assertEquals(afterManual, service.song)
             assertEquals(listOf("r7qovpFAGrQ", "YnopHCL1Jk8"), fetchedIds.take(2))
         } finally {
             activity.destroy()
@@ -77,7 +83,7 @@ class RecommendationPlaybackTest {
                     waiting.countDown()
                     try { release.await(3, TimeUnit.SECONDS) } catch (_: InterruptedException) {}
                     listOf(recommended)
-                } else listOf(afterManual)
+                } else listOf(afterManual, recommended)
             }
             service.select(first)
             await { waiting.count == 0L }
@@ -88,6 +94,14 @@ class RecommendationPlaybackTest {
             release.countDown()
             await { service.nextSong == afterManual }
             assertEquals(manual, service.song)
+            service.trackEnded()
+            val looper = shadowOf(Looper.getMainLooper())
+            looper.idle()
+            assertTrue(service.waitingForAutoplay)
+            service.select(service.suggestedSongs()[1])
+            assertFalse(service.waitingForAutoplay)
+            looper.idleFor(5, TimeUnit.SECONDS)
+            assertEquals(recommended, service.song)
         } finally {
             release.countDown()
             controller.destroy()

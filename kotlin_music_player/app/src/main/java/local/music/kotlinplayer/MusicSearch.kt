@@ -19,7 +19,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 data class Song(val title: String, val artist: String, val url: String,
-                val duration: Long, val thumbnail: String, val preview: String)
+                val duration: Long, val thumbnail: String, val preview: String, val searchQuery: String = "")
 data class SongStream(val audio: String, val video: String = "")
 
 object MusicSearch {

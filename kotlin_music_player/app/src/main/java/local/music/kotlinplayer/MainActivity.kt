@@ -241,7 +241,7 @@ class MainActivity : Activity() {
                 ui.post {
                     if (!closed && version == searchVersion) {
                         searching = false
-                        songs.addAll(found)
+                        songs.addAll(found.map { it.copy(searchQuery = name) })
                         screen.showResults(found.size)
                         adapter.notifyDataSetChanged()
                         message.text = if (found.isEmpty()) "No songs found. Try another name." else "Tap a song to play."

@@ -4,6 +4,7 @@
 # ///
 """Search YouTube Music, rank neighbors, or learn from interactive choices."""
 import argparse
+from collections import Counter
 import csv
 import hashlib
 import json
@@ -17,7 +18,7 @@ import time
 import unicodedata
 from pathlib import Path
 
-VIDEO_TYPES = {"MUSIC_VIDEO_TYPE_OMV", "MUSIC_VIDEO_TYPE_UGC"}
+VIDEO_TYPES = {"MUSIC_VIDEO_TYPE_OMV", "MUSIC_VIDEO_TYPE_UGC", "MUSIC_VIDEO_TYPE_ATV"}
 
 LIVE_MARKER = re.compile(
     r"\b(?:live\s+(?:at|from|in\s+concert|session|performance|version|recording|on\s+stage)"
@@ -65,16 +66,36 @@ def artist_keys(track):
     return keys
 
 
-def language_compatible(seed_language, seed_artists, song):
+def language_compatible(seed_language, song):
     language = language_hint(song["title"])
     if seed_language and language:
         return seed_language == language
-    return bool(seed_artists & artist_keys(song))
+    return True
+
+MUSIC_STYLES = re.compile(r"\b(pop|rock|rap|hip[ -]?hop|jazz|classical|folk|indie|acoustic|instrumental|dance|metal|bollywood|lo[ -]?fi)\b", re.I)
+
+
+def track_profile(track):
+    artists = {"artist:" + artist for artist in artist_keys(track)}
+    context = track["title"] + " " + track.get("query", "")
+    language = language_hint(track["title"]) or language_hint(track.get("query", "") + " songs")
+    styles = {"style:" + style.casefold().replace(" ", "-") for style in MUSIC_STYLES.findall(context)}
+    return artists | styles | ({"language:" + language} if language else set())
+
+
+def neighbor_preference(song, history, seed_profile):
+    candidate = track_profile(song)
+    neighbors = []
+    for profile in [seed_profile, *history]:
+        if candidate and profile:
+            neighbors.append(len(candidate & profile) / len(candidate | profile))
+    nearest = sorted(neighbors, reverse=True)[:5]
+    return (1 + sum(nearest)) / (2 + len(nearest))
 
 
 def studio_candidate(title, kind):
     return bool(title and kind in VIDEO_TYPES and not LIVE_MARKER.search(title) and not REMIX_MARKER.search(title)
-                and (kind == "MUSIC_VIDEO_TYPE_OMV" or STUDIO_MARKER.search(title)))
+                and (kind != "MUSIC_VIDEO_TYPE_UGC" or STUDIO_MARKER.search(title)))
 
 
 def live_recording(row):
@@ -200,6 +221,11 @@ class Listener:
     def __init__(self, path):
         self.path = path
         self.transitions = {}
+        self.plays_path = path.with_name("played_profiles.json")
+        try:
+            self.plays = [set(profile) for profile in json.loads(self.plays_path.read_text())][-100:]
+        except (OSError, ValueError, TypeError):
+            self.plays = []
         self.events_path = path.with_name("song_choices.csv")
         if self.events_path.exists():
             with self.events_path.open(newline="") as f:
@@ -210,6 +236,18 @@ class Listener:
             with path.open(newline="") as f:
                 for reward, raw in csv.reader(f):
                     self.update(json.loads(raw), float(reward))
+
+    def observe(self, track):
+        profile = track_profile(track)
+        if not profile:
+            return
+        self.plays = (self.plays + [profile])[-100:]
+        try:
+            temporary = self.plays_path.with_suffix(".tmp")
+            temporary.write_text(json.dumps([sorted(p) for p in self.plays]))
+            temporary.replace(self.plays_path)
+        except OSError:
+            pass
 
     def remember(self, source, song, reward):
         entries = self.transitions.setdefault(recording_group(source), {})
@@ -274,16 +312,21 @@ def personalized(seed, queue, listener, excluded=(), remembered=()):
     songs = {identity(seed)}
     ranked = []
     seed_language = language_hint(seed["title"])
-    seed_artists = artist_keys(seed)
+    seed_profile = track_profile(seed)
+    seed_language = seed_language or language_hint(seed.get("query", "") + " songs")
     for song, i in pool.values():
         if (song["video_id"] in seen or not studio_candidate(song["title"], song.get("video_type"))
-                or not language_compatible(seed_language, seed_artists, song)):
+                or not language_compatible(seed_language, song)):
             continue
         x = features(seed, song, i)
         prior = 0.55 * x.get("radio_rank", 0.0)
         broad = listener.base_score({k: v for k, v in x.items() if k != "radio_rank"})
         net = past.get(song["video_id"], (None, 0.0))[1]
-        score = prior + 0.12 * math.tanh(broad) + 0.85 * math.tanh(net)
+        similarity = neighbor_preference(song, listener.plays, seed_profile)
+        known_language = seed_language and language_hint(song["title"]) == seed_language
+        score = (prior + 0.12 * math.tanh(broad) + 0.85 * math.tanh(net)
+                 + 0.45 * similarity + (0.14 if known_language else 0))
+        score = 1 / (1 + math.exp(-score))
         ranked.append((score, song, x))
     ranked.sort(key=lambda row: row[0], reverse=True)
     unique = []
@@ -303,11 +346,12 @@ def resolve_seed(radio, video_id, title, artist):
 
 
 def recommend(radio, listener, video_id=None, title="", artist=None, *,
-              excluded=(), use_knn=False, fill=False, on_fast=None, cancelled=lambda: False):
+              excluded=(), use_knn=False, fill=False, query="", on_fast=None, cancelled=lambda: False):
     """Return personalized (score, track, features) rows for an exact recording."""
     seed = resolve_seed(radio, video_id, title, artist)
     if not seed or cancelled():
         return []
+    seed["query"] = query
     try:
         tracks = radio.queue(seed)
     except Exception:
@@ -329,11 +373,17 @@ def recommend(radio, listener, video_id=None, title="", artist=None, *,
     rows = personalized(seed, tracks, listener, excluded, remembered)
     if needs_fill:
         artist = " ".join(seed["artists"])
-        language = language_hint(seed["title"]) or ""
+        language = language_hint(seed["title"]) or language_hint(query + " songs") or ""
         if language.endswith("-script") or language in {"devanagari", "cyrillic"}:
             language = ""
         queries = [f"{artist} {language}", f"{seed['title']} {artist} {language}",
-                   f"{artist} {language} studio songs", f"{artist} {language} music album"]
+                   f"{artist} {language} studio songs", f"{artist} {language} music album",
+                   f"{language} similar to {seed['title']} {artist} music"]
+        styles = Counter(key.removeprefix("style:") for profile in listener.plays
+                         for key in sorted(profile) if key.startswith("style:"))
+        if styles:
+            style, _ = styles.most_common(1)[0]
+            queries.append(f"{style} {language} songs like {seed['title']} {artist}")
         for query in dict.fromkeys(query.strip() for query in queries):
             if len(rows) >= 20 or cancelled():
                 break

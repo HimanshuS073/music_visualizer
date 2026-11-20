@@ -91,9 +91,10 @@ autoplay off. History and the radio cache are stored locally in
 `data/next_song_bandit/`. Set `MUSIC_RECOMMENDER_DATA` to use a different folder.
 The standalone `python music_recommender.py --help` interface is still available.
 
-The desktop recommender matches language clues in video titles and filters out
+The desktop recommender checks language clues in titles and search terms and filters out
 remixes, mashups, sped-up and slowed versions. When the language is unclear,
-it keeps suggestions to the same artist, which can leave a shorter list.
+related tracks can still qualify. Nearby matches to the language, style, and
+artist clues from songs you choose to play receive a higher rank.
 
 ## Change the visualizer
 
@@ -128,15 +129,15 @@ without the visualizer; press F5 after fixing the audio connection.
 
 ## Packaged versions
 
-Get the Linux and Windows installers from the [desktop release](https://github.com/HimanshuS073/music_visualizer/releases/tag/v0.2.2).
-The [Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.15) includes the Music Room APK.
+Get the Linux and Windows installers from the [desktop release](https://github.com/HimanshuS073/music_visualizer/releases/tag/v0.2.3).
+The [Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.16) includes the Music Room APK.
 If you build locally, look for these files:
 
 | Platform | Local file | Requirements |
 | --- | --- | --- |
 | Linux | `dist/music-player-linux-recommendations.run` | x86-64 Linux with graphics and PipeWire/PulseAudio |
 | Windows | `dist/music-player-windows-recommendations.exe` | Windows 10/11, 64-bit |
-| Android | `kotlin_music_player/releases/music-room-v16.apk` | Android 8.0 or newer |
+| Android | `kotlin_music_player/releases/music-room-v17.apk` | Android 8.0 or newer |
 
 These builds include their app dependencies. You still need internet access,
 working graphics drivers, and an audio output. Linux also uses your existing
@@ -186,7 +187,7 @@ Windows hardware.
 
 ### Android — Music Room
 
-Download [Music Room 1.15](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.15)
+Download [Music Room 1.16](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.16)
 or use **Settings → Check updates** in the installed app.
 
 Long-press a search result to queue it. Tap **Suggestions** to open the full ranked list. When a track ends, the player checks

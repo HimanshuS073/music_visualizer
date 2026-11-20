@@ -44,7 +44,7 @@ class PlaybackService : MediaSessionService() {
     inner class LocalBinder : Binder() { val service get() = this@PlaybackService }
     private val binder = LocalBinder()
     private val ui = Handler(Looper.getMainLooper())
-    private val recommendations = Recommendations()
+    private lateinit var recommendations: Recommendations
     private val radio = Executors.newSingleThreadExecutor()
     private val radioCache = android.util.LruCache<String, List<Song>>(32)
     private var radioJob = MusicSearch.Job()
@@ -86,6 +86,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        recommendations = Recommendations(getSharedPreferences("recommendations", MODE_PRIVATE))
         preparationLock = StreamPreparationLock(this)
         val renderers = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
@@ -164,7 +165,7 @@ class PlaybackService : MediaSessionService() {
         if (closed || !finished) return
         val queued = manualQueue.removeFirstOrNull()
         if (queued != null) {
-            startTrack(queued, userInitiated = false)
+            startTrack(queued, userInitiated = false, learn = true)
         } else if (suggestions.isNotEmpty() && !waitingForAutoplay) {
             waitingForAutoplay = true
             ui.postDelayed(autoplay, 5000L)
@@ -186,6 +187,8 @@ class PlaybackService : MediaSessionService() {
             add("$artist studio songs")
             add("$artist album music videos")
             add("${seed.title} $artist official music video")
+            if (seed.searchQuery.isNotBlank()) add("${seed.searchQuery} related music videos")
+            add("music similar to ${seed.title} $artist")
             if (language.isNotEmpty()) add("$language songs official music video")
         }.distinct()
 
@@ -228,7 +231,7 @@ class PlaybackService : MediaSessionService() {
         suggestions.clear()
     }
 
-    private fun startTrack(selected: Song, userInitiated: Boolean = true) {
+    private fun startTrack(selected: Song, userInitiated: Boolean = true, learn: Boolean = userInitiated) {
         if (closed) return
         val request = ++version
         finished = false
@@ -274,6 +277,7 @@ class PlaybackService : MediaSessionService() {
                         player.playWhenReady = desiredPlaying
                         player.prepare()
                         preparationLock.release()
+                        if (learn) recommendations.observe(selected)
                         discover(selected, request)
                     }
                 }

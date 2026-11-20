@@ -100,6 +100,18 @@ class RecommendationsTest(unittest.TestCase):
         rows = personalized(source, [different, matching, same_artist], listener)
         self.assertEqual([row[1]["video_id"] for row in rows], [B, D])
 
+    def test_saved_play_profiles_rank_unlabeled_matches(self):
+        listener = Listener(self.path / "feedback.csv")
+        seed_track = resolve_seed(None, A, "Roots", "Singer")
+        similar = track_info(video(B, "Acoustic First", "Another singer"))
+        other = track_info(video(C, "Dance Second", "Different singer"))
+        for _ in range(5):
+            listener.observe(dict(similar, query="acoustic"))
+        restored = Listener(self.path / "feedback.csv")
+        rows = personalized(seed_track, [other, similar], restored)
+        self.assertEqual([row[1]["video_id"] for row in rows], [B, C])
+        self.assertGreater(rows[0][0], rows[1][0])
+
     def test_short_desktop_queue_searches_for_twenty_eligible_tracks(self):
         self.api.search = lambda query, **kwargs: [
             SONGS[B], video("EEEEEEEEEEE", "Wrong (Hindi Song)", "Lil Nas X"),

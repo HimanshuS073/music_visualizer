@@ -239,6 +239,7 @@ end
 local function select_song(index, enqueue)
     local song = panel_results()[index]
     if not song then return end
+    song.learn = true
     selected_result = index
     feedback(tracks.choice_source or tracks.current, song, "choice")
     close_input_box()
@@ -287,6 +288,7 @@ local function receive(reply)
         if reply.id ~= latest_search then return end
         if not reply.ok then search_message = reply.error; return end
         results = reply.results or {}
+        for _, song in ipairs(results) do song.search_query = song_name; song.learn = true end
         selected_result, first_result = 1, 1
         search_message = #results == 0 and "No songs found. Try another name." or
                          tostring(#results) .. " results · Enter to play · Shift+Enter to queue"
@@ -314,7 +316,8 @@ local function receive(reply)
             if settings.enabled ~= false then
                 tracks.request = request("recommend", {video_id=selected_song.video_id,
                     title=selected_song.title, artist=artist_of(selected_song),
-                    exclude=table.concat(tracks.recent, ","), fill=true, knn=settings.knn == true}, "recommend")
+                    exclude=table.concat(tracks.recent, ","), fill=true, query=selected_song.search_query or "",
+                    learn=selected_song.learn == true, knn=settings.knn == true}, "recommend")
                 tracks.waiting = tracks.request ~= nil
             end
         else playback_running = false end

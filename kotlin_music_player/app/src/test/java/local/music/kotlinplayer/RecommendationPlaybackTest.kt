@@ -178,7 +178,7 @@ class RecommendationPlaybackTest {
         val unknown = song("EEEEEEEEEEE", "Fifth (Official Video)", "Another singer")
         val recommendations = Recommendations()
         recommendations.feedback(seed, different, 1.0)
-        assertEquals(listOf(matching), recommendations.rank(seed, listOf(different, remix, unknown, matching)))
+        assertEquals(listOf(matching, unknown), recommendations.rank(seed, listOf(different, remix, matching, unknown)))
     }
 
     private fun await(condition: () -> Boolean) {

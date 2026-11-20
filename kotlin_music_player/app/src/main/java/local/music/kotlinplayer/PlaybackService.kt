@@ -62,6 +62,7 @@ class PlaybackService : MediaSessionService() {
     }
     val nextSong: Song? get() = manualQueue.firstOrNull() ?: suggestions.firstOrNull()
     fun suggestedSongs(): List<Song> = suggestions.toList()
+    internal var searchRecommendations: (String, MusicSearch.Job) -> List<Song> = MusicSearch::search
     internal var relatedVideos: (String, MusicSearch.Job) -> List<Song> = MusicSearch::related
     internal var resolveStream: (Song, MusicSearch.Job) -> SongStream = MusicSearch::resolve
     private val resolver = Executors.newSingleThreadExecutor()
@@ -178,25 +179,42 @@ class PlaybackService : MediaSessionService() {
     private fun discover(seed: Song, request: Int) {
         val id = seed.videoId ?: return
         val requestJob = radioJob
-        fun apply(candidates: List<Song>) {
-            if (closed || request != version) return
-            suggestions.addAll(recommendations.rank(seed, candidates))
-            advance()
-        }
-        val cached = radioCache.get(id)
-        if (cached != null) {
-            apply(cached)
-            return
-        }
-        radioTask = radio.submit {
-            val candidates = try { relatedVideos(id, requestJob) } catch (_: Exception) { emptyList() }
-            ui.post {
-                if (!closed && request == version && !requestJob.cancelled) {
-                    if (candidates.isNotEmpty()) radioCache.put(id, candidates)
-                    apply(candidates)
+        val queries = listOf(
+            "${seed.artist} official music video",
+            "${seed.title} ${seed.artist} official music video",
+            "music similar to ${seed.artist} ${seed.title} official music video",
+        ).distinct()
+
+        fun load(fetch: () -> List<Song>, onResult: (List<Song>) -> Unit) {
+            radioTask = radio.submit {
+                val songs = try { fetch() } catch (_: Exception) { emptyList() }
+                ui.post {
+                    if (!closed && request == version && !requestJob.cancelled) onResult(songs)
                 }
             }
         }
+
+        fun fill(candidates: List<Song>, queryIndex: Int, publishFirst: Boolean) {
+            val ranked = recommendations.rank(seed, candidates)
+            val complete = ranked.size >= SUGGESTION_COUNT || queryIndex == queries.size
+            if (publishFirst || complete) {
+                suggestions.clear()
+                suggestions.addAll(ranked)
+                advance()
+                if (request != version) return
+            }
+            if (complete) {
+                if (candidates.isNotEmpty()) radioCache.put(id, candidates)
+                return
+            }
+            load({ searchRecommendations(queries[queryIndex], requestJob) }) { more ->
+                fill((candidates + more).distinctBy { it.videoId ?: it.url }, queryIndex + 1, publishFirst = false)
+            }
+        }
+
+        val cached = radioCache.get(id)
+        if (cached != null) fill(cached, 0, publishFirst = true)
+        else load({ relatedVideos(id, requestJob) }) { fill(it, 0, publishFirst = true) }
     }
 
     private fun cancelDiscovery() {

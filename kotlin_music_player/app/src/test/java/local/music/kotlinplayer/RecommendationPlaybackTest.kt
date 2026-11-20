@@ -33,7 +33,7 @@ class RecommendationPlaybackTest {
     @Test fun exactIdNextLabelAndHandoffUseTheServiceQueue() {
         val controller = Robolectric.buildService(PlaybackService::class.java).create()
         val activity = Robolectric.buildActivity(android.app.Activity::class.java).create()
-        val service = controller.get()
+        val service = controller.get().apply { searchRecommendations = { _, _ -> emptyList() } }
         val fetchedIds = java.util.concurrent.CopyOnWriteArrayList<String>()
         try {
             service.resolveStream = { _, _ -> SongStream("asset:///mock-track.mp3") }
@@ -73,7 +73,7 @@ class RecommendationPlaybackTest {
 
     @Test fun finishedTrackWaitsForRecommendationsButADifferentTrackInvalidatesTheResult() {
         val controller = Robolectric.buildService(PlaybackService::class.java).create()
-        val service = controller.get()
+        val service = controller.get().apply { searchRecommendations = { _, _ -> emptyList() } }
         val waiting = CountDownLatch(1)
         val release = CountDownLatch(1)
         try {
@@ -110,7 +110,7 @@ class RecommendationPlaybackTest {
 
     @Test fun suggestionDialogScrollsToTheTwentiethTrack() {
         val controller = Robolectric.buildService(PlaybackService::class.java).create()
-        val service = controller.get()
+        val service = controller.get().apply { searchRecommendations = { _, _ -> emptyList() } }
         shadowOf(org.robolectric.RuntimeEnvironment.getApplication()).setComponentNameAndServiceForBindService(
             android.content.ComponentName(service, PlaybackService::class.java),
             service.onBind(android.content.Intent().setAction(PlaybackService.LOCAL_BIND))!!
@@ -143,6 +143,26 @@ class RecommendationPlaybackTest {
             window.pause().stop().destroy()
             controller.destroy()
         }
+    }
+
+    @Test fun fillsShortRelatedQueuesWithoutRepeatingTracks() {
+        val controller = Robolectric.buildService(PlaybackService::class.java).create()
+        val service = controller.get()
+        try {
+            service.resolveStream = { _, _ -> SongStream("asset:///mock-track.mp3") }
+            service.relatedVideos = { _, _ -> listOf(first, recommended, recommended) }
+            service.searchRecommendations = { _, _ ->
+                listOf(first, recommended) + (1..25).map {
+                    song("track" + it.toString().padStart(6, '0'), "Track $it (Official Video)", "Artist")
+                }
+            }
+            service.select(first)
+            await { service.suggestedSongs().size == 20 }
+            val ids = service.suggestedSongs().map { it.videoId }
+            assertEquals(20, ids.distinct().size)
+            assertFalse(first.videoId in ids)
+            assertEquals(recommended, service.nextSong)
+        } finally { controller.destroy() }
     }
 
     private fun await(condition: () -> Boolean) {

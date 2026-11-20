@@ -9,6 +9,8 @@ private val videoUrlPattern = Regex("(?:[?&]v=|youtu\\.be/|/shorts/)([A-Za-z0-9_
 internal val Song.videoId: String?
     get() = url.takeIf(videoIdPattern::matches) ?: videoUrlPattern.find(url)?.groupValues?.get(1)
 
+internal const val SUGGESTION_COUNT = 20
+
 internal class Recommendations {
     private val studio = Regex("\\b(?:official\\s+(?:music\\s+)?video|studio\\s+(?:version|recording))\\b", RegexOption.IGNORE_CASE)
     private val live = Regex("\\b(?:live (?:at|from|session|performance|version|recording|on stage|in concert)|in concert|fancam|fan cam|unplugged|tiny desk|en vivo|ao vivo)\\b|[\\[(|–—-]\\s*live\\b", RegexOption.IGNORE_CASE)
@@ -41,7 +43,6 @@ internal class Recommendations {
             val id = song.videoId ?: continue
             if (eligible(song) && id != seed.videoId && id !in pool && identity(song) != identity(seed)) {
                 pool[id] = song to (0.55 / log2(pool.size + 2.0))
-                if (pool.size == 20) break
             }
         }
         for ((id, choice) in priorChoices) {
@@ -52,6 +53,6 @@ internal class Recommendations {
                 prior + 0.12 * tanh(artistWeights[identity(song).second] ?: 0.0) +
                     0.85 * tanh(priorChoices[song.videoId]?.second ?: 0.0)
             }.map { it.first }.filter { identity(it) != identity(seed) }
-            .distinctBy(::identity).take(20)
+            .distinctBy(::identity).take(SUGGESTION_COUNT)
     }
 }

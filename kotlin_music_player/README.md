@@ -91,7 +91,7 @@ Then run:
 ```
 
 The result is `app/build/outputs/apk/debug/app-debug.apk`. Local checked copies
-are kept in `releases/`; GitHub installers use names such as `music-room-v13.apk`.
+are kept in `releases/`; GitHub installers use names such as `music-room-v14.apk`.
 The number in the filename is Android's version code, not its display version.
 
 The application ID is `local.music.kotlinplayer`, so it can be installed beside
@@ -104,7 +104,7 @@ an installation signed with the original key.
 ## App updates
 
 Install the latest Music Room APK from the
-[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.12).
+[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.13).
 Earlier APKs don't contain the updater.
 
 On launch, Music Room checks public GitHub releases in the background. When a
@@ -129,7 +129,7 @@ playing. Pending installer permissions survive normal activity recreation.
 
 The updater looks through the 100 most recent releases, ignores drafts and
 prereleases, and only accepts Android tags like `android-v1.3` with assets named
-`music-room-v13.apk`. Desktop releases don't affect it. The asset must include
+`music-room-v14.apk`. Desktop releases don't affect it. The asset must include
 GitHub's SHA-256 digest. It selects the highest newer version code.
 
 ## Publishing the next Android update
@@ -219,8 +219,9 @@ Background playback follows [Android’s MediaSessionService guide](https://deve
 The playback controls show the next song and its artist. Long-press a search
 result to add it to the manual queue. The service checks that queue first when
 the current song ends, then uses its highest-ranked recommendation. Tap
-**Suggestions** in the playback controls to see up to 20 ranked songs. Tap a
-song to play it. If the manual queue is empty, the first suggestion starts
+**Suggestions** in the playback controls to see 20 ranked songs when available.
+If related videos fall short, Music Room searches for more studio videos in the
+background. Tap a song to play it. If the manual queue is empty, the first suggestion starts
 after five seconds once the current track has finished and suggestions are ready.
 
 NewPipe fetches related videos using the current YouTube video ID. Android

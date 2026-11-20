@@ -108,6 +108,43 @@ class RecommendationPlaybackTest {
         }
     }
 
+    @Test fun suggestionDialogScrollsToTheTwentiethTrack() {
+        val controller = Robolectric.buildService(PlaybackService::class.java).create()
+        val service = controller.get()
+        shadowOf(org.robolectric.RuntimeEnvironment.getApplication()).setComponentNameAndServiceForBindService(
+            android.content.ComponentName(service, PlaybackService::class.java),
+            service.onBind(android.content.Intent().setAction(PlaybackService.LOCAL_BIND))!!
+        )
+        val window = Robolectric.buildActivity(MainActivity::class.java).create().start().resume()
+        val activity = window.get()
+        fun field(name: String) = MainActivity::class.java.getDeclaredField(name)
+            .apply { isAccessible = true }.get(activity)
+        try {
+            service.resolveStream = { _, _ -> SongStream("asset:///mock-track.mp3") }
+            service.relatedVideos = { _, _ ->
+                (1..20).map { song("track" + it.toString().padStart(6, '0'), "Track $it (Official Video)", "Artist") }
+            }
+            service.select(first)
+            await { service.suggestedSongs().size == 20 }
+            val screen = field("screen") as MusicScreen
+            screen.suggestionsButton.performClick()
+            val list = field("suggestionsList") as android.widget.LinearLayout
+            val scroll = list.parent as android.widget.ScrollView
+            val width = View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY)
+            val height = View.MeasureSpec.makeMeasureSpec(scroll.layoutParams.height, View.MeasureSpec.EXACTLY)
+            scroll.measure(width, height)
+            scroll.layout(0, 0, scroll.measuredWidth, scroll.measuredHeight)
+            assertTrue(scroll.canScrollVertically(1))
+            scroll.scrollTo(0, list.height)
+            assertTrue(scroll.scrollY > 0)
+            assertTrue(list.getChildAt(19).bottom <= scroll.scrollY + scroll.height)
+            assertTrue(labels(list.getChildAt(19)).contains("20. Track 20 (Official Video)"))
+        } finally {
+            window.pause().stop().destroy()
+            controller.destroy()
+        }
+    }
+
     private fun await(condition: () -> Boolean) {
         val simulation = shadowOf(Looper.getMainLooper())
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(4)

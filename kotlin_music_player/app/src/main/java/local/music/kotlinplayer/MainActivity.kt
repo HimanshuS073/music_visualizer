@@ -88,7 +88,7 @@ class MainActivity : Activity() {
     private var suggestionsDialog: AlertDialog? = null
     private var suggestionsList: LinearLayout? = null
     private var shownSuggestions: List<Song>? = null
-    private var shownAutoplay = false
+    private var suggestionsHint: TextView? = null
     private var videoFps = 8
     private var lastFrame = 0L
 
@@ -379,14 +379,30 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(8), dp(16), dp(8))
         }
-        val scroll = ScrollView(this).apply { addView(list) }
+        val hint = label("Tap a song, or the first suggestion will play automatically.", 13).apply {
+            setPadding(dp(16), dp(4), dp(16), dp(4))
+            visibility = View.GONE
+        }
+        val scroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = true
+            isScrollbarFadingEnabled = false
+            addView(list, FrameLayout.LayoutParams(-1, -2))
+        }
+        val visibleHeight = screen.root.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(hint, LinearLayout.LayoutParams(-1, -2))
+            addView(scroll, LinearLayout.LayoutParams(-1, minOf(dp(460), visibleHeight * 3 / 5)))
+        }
         val dialog = AlertDialog.Builder(this).setTitle("Suggested songs")
-            .setView(scroll).setPositiveButton("Done", null).create()
+            .setView(panel).setPositiveButton("Done", null).create()
+        suggestionsHint = hint
         suggestionsList = list
         suggestionsDialog = dialog
         dialog.setOnDismissListener {
             suggestionsDialog = null
             suggestionsList = null
+            suggestionsHint = null
             shownSuggestions = null
         }
         refreshSuggestions()
@@ -397,14 +413,10 @@ class MainActivity : Activity() {
         val list = suggestionsList ?: return
         val service = playback
         val songs = service?.suggestedSongs().orEmpty()
-        val waiting = service?.waitingForAutoplay == true
-        if (songs == shownSuggestions && waiting == shownAutoplay) return
+        suggestionsHint?.visibility = if (service?.waitingForAutoplay == true) View.VISIBLE else View.GONE
+        if (songs == shownSuggestions) return
         shownSuggestions = songs
-        shownAutoplay = waiting
         list.removeAllViews()
-        if (waiting) {
-            list.addView(label("Tap a song, or the first suggestion will play automatically.", 13))
-        }
         if (songs.isEmpty()) {
             list.addView(label("No suggestions yet.", 14))
             return

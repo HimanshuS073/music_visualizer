@@ -7,7 +7,7 @@ from pathlib import Path
 from queue import Empty, SimpleQueue
 import threading
 
-from music_recommender import Listener, Radio, features, recommend, resolve_seed
+from music_recommender import Listener, Radio, features, recommend
 
 
 def history_directory():
@@ -56,12 +56,13 @@ class RecommendationTask:
             self.workers = [threading.Thread(target=self.work, daemon=True) for _ in range(2)]
             for worker in self.workers:
                 worker.start()
-        listener = self.history()
-        if request.get("learn") and request.get("video_id"):
-            selected = resolve_seed(None, request["video_id"], request["title"], request.get("artist"))
-            selected["query"] = request.get("query") or ""
-            listener.observe(selected)
-        self.jobs.put((request, self.cancelled, deepcopy(listener)))
+        self.jobs.put((request, self.cancelled, deepcopy(self.history())))
+
+    def searched(self, query):
+        self.history().searched(query)
+
+    def played(self, track, chosen):
+        self.history().played(track, chosen)
 
     def cancel(self):
         self.cancelled.set()

@@ -83,6 +83,15 @@ def track_profile(track):
     return artists | styles | ({"language:" + language} if language else set())
 
 
+def search_affinity(query, song):
+    words = set(re.findall(r"[^\W_]+", query.casefold()))
+    if not words:
+        return 0
+    song_words = set(re.findall(r"[^\W_]+", (song["title"] + " " + " ".join(song["artists"])).casefold()))
+    profile = track_profile({"title": "", "artists": [], "query": query})
+    return 0.18 * len(words & song_words) / len(words) + 0.12 * bool(profile & track_profile(song))
+
+
 def neighbor_preference(song, history, seed_profile):
     candidate = track_profile(song)
     neighbors = []
@@ -226,6 +235,13 @@ class Listener:
             self.plays = [set(profile) for profile in json.loads(self.plays_path.read_text())][-100:]
         except (OSError, ValueError, TypeError):
             self.plays = []
+        self.context_path = path.with_name("recommendation_context.json")
+        try:
+            self.context = json.loads(self.context_path.read_text())
+            if not isinstance(self.context, dict):
+                self.context = {}
+        except (OSError, ValueError):
+            self.context = {}
         self.events_path = path.with_name("song_choices.csv")
         if self.events_path.exists():
             with self.events_path.open(newline="") as f:
@@ -236,6 +252,27 @@ class Listener:
             with path.open(newline="") as f:
                 for reward, raw in csv.reader(f):
                     self.update(json.loads(raw), float(reward))
+
+    def save_context(self):
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", dir=self.context_path.parent, delete=False) as handle:
+                json.dump(self.context, handle)
+            Path(handle.name).replace(self.context_path)
+        except OSError:
+            pass
+
+    def searched(self, query):
+        self.context["search"] = query.strip()[:240]
+        self.save_context()
+
+    def played(self, track, chosen=False):
+        self.context["last_played"] = track
+        recent = [key for key in self.context.get("recent", []) if key != track["video_id"]]
+        self.context["recent"] = (recent + [track["video_id"]])[-20:]
+        if chosen:
+            self.context["last_chosen"] = track
+            self.observe(track)
+        self.save_context()
 
     def observe(self, track):
         profile = track_profile(track)
@@ -308,7 +345,7 @@ def personalized(seed, queue, listener, excluded=(), remembered=()):
     for key, (song, net) in past.items():
         if net > 0 and song.get("studio_filter_version") == 1:
             pool.setdefault(key, (song, None))
-    seen = set(excluded) | {seed["video_id"]}
+    seen = set(excluded) | set(listener.context.get("recent", [])) | {seed["video_id"]}
     songs = {identity(seed)}
     ranked = []
     seed_language = language_hint(seed["title"])
@@ -325,7 +362,8 @@ def personalized(seed, queue, listener, excluded=(), remembered=()):
         similarity = neighbor_preference(song, listener.plays, seed_profile)
         known_language = seed_language and language_hint(song["title"]) == seed_language
         score = (prior + 0.12 * math.tanh(broad) + 0.85 * math.tanh(net)
-                 + 0.45 * similarity + (0.14 if known_language else 0))
+                 + 0.45 * similarity + (0.14 if known_language else 0)
+                 + search_affinity(listener.context.get("search", ""), song))
         score = 1 / (1 + math.exp(-score))
         ranked.append((score, song, x))
     ranked.sort(key=lambda row: row[0], reverse=True)
@@ -362,16 +400,26 @@ def recommend(radio, listener, video_id=None, title="", artist=None, *,
         return []
     fast = personalized(seed, tracks, listener, excluded)
     pending = unverified_choices(seed, listener, tracks, excluded)
+    recent_search = listener.context.get("search", "")
+    search_query = f"{recent_search} official music video" if recent_search and recent_search.casefold() != query.casefold() else ""
     needs_fill = fill and len(fast) < 20
-    if not pending and not use_knn and not needs_fill:
+    if not pending and not use_knn and not needs_fill and not (fill and search_query):
         return fast
     if on_fast:
         on_fast(fast)
     remembered = remembered_choices(radio, pending, cancelled)
     if use_knn and not cancelled():
         tracks = rank({"seed": seed, "recommendations": tracks}, radio.queue, cancelled)
+    if fill and search_query and not cancelled():
+        try:
+            merged = {song["video_id"]: song for song in tracks}
+            for song in radio.search(search_query):
+                merged.setdefault(song["video_id"], song)
+            tracks = list(merged.values())
+        except Exception:
+            pass
     rows = personalized(seed, tracks, listener, excluded, remembered)
-    if needs_fill:
+    if fill and len(rows) < 20:
         artist = " ".join(seed["artists"])
         language = language_hint(seed["title"]) or language_hint(query + " songs") or ""
         if language.endswith("-script") or language in {"devanagari", "cyrillic"}:

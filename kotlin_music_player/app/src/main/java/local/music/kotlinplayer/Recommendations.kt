@@ -68,7 +68,44 @@ internal class Recommendations(private val preferences: SharedPreferences? = nul
     private val studio = Regex("\\b(?:official\\s+(?:music\\s+)?(?:video|audio)|lyric\\s+video|studio\\s+(?:version|recording))\\b", RegexOption.IGNORE_CASE)
     private val live = Regex("\\b(?:live (?:at|from|session|performance|version|recording|on stage|in concert)|in concert|fancam|fan cam|unplugged|tiny desk|en vivo|ao vivo)\\b|[\\[(|–—-]\\s*live\\b", RegexOption.IGNORE_CASE)
     private val remix = Regex("""\b(?:re[\s-]?mix(?:ed|es)?|mash[\s-]?up|sped[\s-]?up|slowed|nightcore|bootleg|reverb)\b""", RegexOption.IGNORE_CASE)
-    private val recent = ArrayDeque<String>()
+    private val recent = ArrayDeque(preferences?.getString("recent_ids", "").orEmpty()
+        .split(',').filter(videoIdPattern::matches).takeLast(20))
+    var searchQuery = preferences?.getString("last_search", "").orEmpty()
+        private set
+
+    fun searched(query: String): Boolean {
+        val next = query.trim().take(240)
+        if (next == searchQuery) return false
+        searchQuery = next
+        preferences?.edit()?.putString("last_search", next)?.apply()
+        return true
+    }
+
+    fun played(song: Song, chosen: Boolean) {
+        song.videoId?.let {
+            recent.remove(it)
+            recent.addLast(it)
+            if (recent.size > 20) recent.removeFirst()
+        }
+        val track = JSONArray(listOf(song.videoId, song.title, song.artist)).toString()
+        preferences?.edit()?.apply {
+            putString("last_played", track)
+            putString("recent_ids", recent.joinToString(","))
+            if (chosen) putString("last_chosen", track)
+            apply()
+        }
+        if (chosen) observe(song)
+    }
+
+    private fun searchAffinity(song: Song): Double {
+        val word = Regex("""[\p{L}\p{N}]+""")
+        val queryWords = word.findAll(searchQuery.lowercase(Locale.ROOT)).map { it.value }.toSet()
+        if (queryWords.isEmpty()) return 0.0
+        val songWords = word.findAll("${song.title} ${song.artist}".lowercase(Locale.ROOT)).map { it.value }.toSet()
+        val queryProfile = song.copy(title = "", artist = "", searchQuery = searchQuery).profile()
+        return 0.18 * queryWords.intersect(songWords).size / queryWords.size +
+            if (queryProfile.any { it in song.profile() }) 0.12 else 0.0
+    }
     private val played = ArrayDeque<Set<String>>().apply {
         val stored = runCatching { JSONArray(preferences?.getString("played_profiles", "[]") ?: "[]") }.getOrNull()
         if (stored != null) {
@@ -107,11 +144,6 @@ internal class Recommendations(private val preferences: SharedPreferences? = nul
         return language == null || candidate == null || language == candidate
     }
 
-    fun started(song: Song) {
-        song.videoId?.let(recent::addLast)
-        if (recent.size > 20) recent.removeFirst()
-    }
-
     fun feedback(source: Song, song: Song, reward: Double) {
         val sourceId = source.videoId ?: return
         val id = song.videoId ?: return
@@ -141,7 +173,7 @@ internal class Recommendations(private val preferences: SharedPreferences? = nul
             .sortedByDescending { (song, prior) ->
                 prior + 0.12 * tanh(artistWeights[identity(song).second] ?: 0.0) +
                     0.85 * tanh(priorChoices[song.videoId]?.second ?: 0.0) +
-                    0.45 * neighborPreference(song, seedProfile) +
+                    0.45 * neighborPreference(song, seedProfile) + searchAffinity(song) +
                     (if (language != null && song.languageHint() == language) 0.14 else 0.0)
             }.map { it.first }.filter { identity(it) != identity(seed) }
             .distinctBy(::identity).take(SUGGESTION_COUNT)

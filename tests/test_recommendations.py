@@ -100,6 +100,21 @@ class RecommendationsTest(unittest.TestCase):
         rows = personalized(source, [different, matching, same_artist], listener)
         self.assertEqual([row[1]["video_id"] for row in rows], [B, D])
 
+    def test_recent_plays_and_search_are_restored_and_used(self):
+        path = self.path / "feedback.csv"
+        listener = Listener(path)
+        listener.played(seed(A), chosen=True)
+        listener.played(seed(C))
+        listener.searched("dance")
+        restored = Listener(path)
+        self.assertEqual(restored.context["last_played"]["video_id"], C)
+        self.assertEqual(restored.context["last_chosen"]["video_id"], A)
+        self.assertEqual(restored.context["search"], "dance")
+        dance = track_info(video(D, "Dance (English Song)", "Artist D"))
+        rock = track_info(video(B, "Rock (English Song)", "Artist B"))
+        rows = personalized(seed(A), [rock, track_info(SONGS[C]), dance], restored)
+        self.assertEqual([row[1]["video_id"] for row in rows], [D, B])
+
     def test_saved_play_profiles_rank_unlabeled_matches(self):
         listener = Listener(self.path / "feedback.csv")
         seed_track = resolve_seed(None, A, "Roots", "Singer")

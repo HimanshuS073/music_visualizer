@@ -26,6 +26,7 @@ local player_message = "Choose something to listen to."
 local cover_message = ""
 local latest_search, latest_play, latest_image
 local status_request
+local recorded_play = false
 local status_timer = 0
 local paused = false
 local position, duration = 0, nil
@@ -213,6 +214,7 @@ local function start_song(song, source)
     if suggestions_open then selected_result, first_result = 1, 1 end
     selected_song = song
     status_request = nil
+    recorded_play = false
     position, duration, paused = 0, song.duration, false
     playback_running = true
     visualizer:reset(song.video_id)
@@ -270,6 +272,16 @@ local function skip_playing()
     end
 end
 
+local function refresh_recommendations()
+    local settings = config.recommendations or {}
+    if not selected_song or settings.enabled == false then return end
+    tracks.request = request("recommend", {video_id=selected_song.video_id,
+        title=selected_song.title, artist=artist_of(selected_song),
+        exclude=table.concat(tracks.recent, ","), fill=true, query=selected_song.search_query or "",
+        knn=settings.knn == true}, "recommend")
+    tracks.waiting = tracks.request ~= nil
+end
+
 local function receive(reply)
     local kind = pending[reply.id]
     if kind ~= "recommend" or not reply.ok or reply.done then pending[reply.id] = nil end
@@ -287,6 +299,7 @@ local function receive(reply)
     elseif kind == "search" then
         if reply.id ~= latest_search then return end
         if not reply.ok then search_message = reply.error; return end
+        if recorded_play and playback_running then refresh_recommendations() end
         results = reply.results or {}
         for _, song in ipairs(results) do song.search_query = song_name; song.learn = true end
         selected_result, first_result = 1, 1
@@ -312,14 +325,7 @@ local function receive(reply)
         player_message = reply.ok and "Loading audio…" or reply.error
         if reply.ok then
             status_timer = .75
-            local settings = config.recommendations or {}
-            if settings.enabled ~= false then
-                tracks.request = request("recommend", {video_id=selected_song.video_id,
-                    title=selected_song.title, artist=artist_of(selected_song),
-                    exclude=table.concat(tracks.recent, ","), fill=true, query=selected_song.search_query or "",
-                    learn=selected_song.learn == true, knn=settings.knn == true}, "recommend")
-                tracks.waiting = tracks.request ~= nil
-            end
+            refresh_recommendations()
         else playback_running = false end
     elseif kind == "image" then
         if reply.id ~= latest_image then return end
@@ -364,6 +370,12 @@ local function receive(reply)
         playback_running = reply.running or false
         position = reply.position or 0
         duration = reply.duration or selected_song.duration
+        if reply.ready and not reply.paused and not recorded_play then
+            recorded_play = true
+            request("recommend_played", {video_id=selected_song.video_id, title=selected_song.title,
+                artist=artist_of(selected_song), query=selected_song.search_query or "",
+                chosen=selected_song.learn == true})
+        end
         if reply.error then player_message = reply.error
         elseif reply.ready then player_message = paused and "Paused" or "Playing"
         elseif reply.ended then player_message = "Playback ended"

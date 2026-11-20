@@ -606,6 +606,10 @@ def run_api():
                     reply(pending_search, error=search.error)
                 else:
                     results = songs
+                    try:
+                        recommendations.searched(query)
+                    except OSError:
+                        pass
                     reply(pending_search, {"query": query, "results": [song_info(song) for song in songs]})
                 pending_search = None
             wait = .015 if any(item is not None for item in
@@ -656,6 +660,12 @@ def run_api():
                         if cancelled_id is not None:
                             reply({"id": cancelled_id}, {"recommendations": [], "done": True})
                         recommendations.start(request)
+                    elif request.get("command") == "recommend_played":
+                        track = selected_song(request, [])
+                        profile = resolve_seed(None, track["id"], track["title"], track["artist"])
+                        profile["query"] = request.get("query") or ""
+                        recommendations.played(profile, request.get("chosen") is True)
+                        reply(request)
                     elif request.get("command") == "recommend_feedback":
                         action = request.get("action")
                         if action not in ("skip", "choice"):

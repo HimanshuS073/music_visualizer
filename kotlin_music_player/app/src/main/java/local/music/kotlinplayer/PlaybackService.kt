@@ -46,12 +46,14 @@ class PlaybackService : MediaSessionService() {
     private val ui = Handler(Looper.getMainLooper())
     private lateinit var recommendations: Recommendations
     private val radio = Executors.newSingleThreadExecutor()
-    private val radioCache = android.util.LruCache<String, List<Song>>(32)
+    private val radioCache = android.util.LruCache<Pair<String, String>, List<Song>>(32)
     private var radioJob = MusicSearch.Job()
     private var radioTask: Future<*>? = null
     private val manualQueue = ArrayDeque<Song>()
     private val suggestions = ArrayDeque<Song>()
     private var finished = false
+    private var recordedPlay = false
+    private var learnCurrent = false
     var waitingForAutoplay = false
         private set
     private val autoplay = Runnable {
@@ -101,6 +103,13 @@ class PlaybackService : MediaSessionService() {
         player.setHandleAudioBecomingNoisy(true)
         player.setWakeMode(C.WAKE_MODE_NETWORK)
         player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                val track = song ?: return
+                if (isPlaying && !recordedPlay && !loading) {
+                    recordedPlay = true
+                    recommendations.played(track, learnCurrent)
+                }
+            }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (!loading) desiredPlaying = playWhenReady
             }
@@ -177,9 +186,21 @@ class PlaybackService : MediaSessionService() {
         waitingForAutoplay = false
     }
 
+    fun updateRecommendationSearch(query: String) {
+        if (!recommendations.searched(query)) return
+        val current = song ?: return
+        if (closed || loading || finished) return
+        radioJob.cancel()
+        radioTask?.cancel(true)
+        radioJob = MusicSearch.Job()
+        discover(current, version)
+    }
+
     private fun discover(seed: Song, request: Int) {
         val id = seed.videoId ?: return
         val requestJob = radioJob
+        val searchContext = recommendations.searchQuery
+        val cacheKey = id to searchContext
         val language = seed.languageHint()?.takeUnless { it.endsWith("-script") || it in listOf("devanagari", "cyrillic") }.orEmpty()
         val artist = seed.artist.replace(Regex("""(?:\s*-\s*topic|vevo)$""", RegexOption.IGNORE_CASE), "").trim()
         val queries = buildList {
@@ -211,7 +232,7 @@ class PlaybackService : MediaSessionService() {
                 if (request != version) return
             }
             if (complete) {
-                if (candidates.isNotEmpty()) radioCache.put(id, candidates)
+                if (candidates.isNotEmpty()) radioCache.put(cacheKey, candidates)
                 return
             }
             load({ searchRecommendations(queries[queryIndex], requestJob) }) { more ->
@@ -219,9 +240,15 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
-        val cached = radioCache.get(id)
+        val cached = radioCache.get(cacheKey)
         if (cached != null) fill(cached, 0)
-        else load({ relatedVideos(id, requestJob) }) { fill(it, 0) }
+        else load({ relatedVideos(id, requestJob) }) { related ->
+            if (searchContext.isNotBlank() && searchContext != seed.searchQuery) {
+                load({ searchRecommendations("$searchContext official music video", requestJob) }) { more ->
+                    fill(related + more, 0)
+                }
+            } else fill(related, 0)
+        }
     }
 
     private fun cancelDiscovery() {
@@ -237,7 +264,8 @@ class PlaybackService : MediaSessionService() {
         finished = false
         cancelDiscovery()
         radioJob = MusicSearch.Job()
-        recommendations.started(selected)
+        recordedPlay = false
+        learnCurrent = learn
         job.cancel()
         task?.cancel(true)
         preparationLock.release()
@@ -277,7 +305,6 @@ class PlaybackService : MediaSessionService() {
                         player.playWhenReady = desiredPlaying
                         player.prepare()
                         preparationLock.release()
-                        if (learn) recommendations.observe(selected)
                         discover(selected, request)
                     }
                 }

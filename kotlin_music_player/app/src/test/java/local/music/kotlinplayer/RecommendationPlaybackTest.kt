@@ -181,6 +181,29 @@ class RecommendationPlaybackTest {
         assertEquals(listOf(matching, unknown), recommendations.rank(seed, listOf(different, remix, matching, unknown)))
     }
 
+    @Test fun aNewSearchRefreshesSuggestionsWithoutChangingTheCurrentSong() {
+        val controller = Robolectric.buildService(PlaybackService::class.java).create()
+        val service = controller.get()
+        try {
+            service.resolveStream = { _, _ -> SongStream("asset:///mock-track.mp3") }
+            service.relatedVideos = { _, _ -> listOf(recommended) }
+            service.searchRecommendations = { query, _ ->
+                if (query.contains("dance")) listOf(afterManual.copy(title = "Dance (Official Video)")) else emptyList()
+            }
+            service.select(first)
+            await { service.nextSong == recommended }
+            service.updateRecommendationSearch("dance")
+            await { service.suggestedSongs().any { it.videoId == afterManual.videoId } }
+            assertEquals(first, service.song)
+            val prefs = service.getSharedPreferences("recommendations", android.content.Context.MODE_PRIVATE)
+            assertEquals("dance", Recommendations(prefs).searchQuery)
+            Recommendations(prefs).played(recommended, chosen = true)
+            val restored = Recommendations(prefs)
+            assertTrue(prefs.getString("last_chosen", "").orEmpty().contains(recommended.videoId!!))
+            assertTrue(restored.rank(first, listOf(recommended)).isEmpty())
+        } finally { controller.destroy() }
+    }
+
     private fun await(condition: () -> Boolean) {
         val simulation = shadowOf(Looper.getMainLooper())
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(4)

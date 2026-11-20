@@ -20,10 +20,10 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class RecommendationPlaybackTest {
-    private val first = song("r7qovpFAGrQ", "Old Town Road", "Lil Nas X")
-    private val recommended = song("BBBBBBBBBBB", "B (Official Music Video)", "Artist B")
-    private val manual = song("YnopHCL1Jk8", "Toca Toca (Official Video)", "Fly Project")
-    private val afterManual = song("DDDDDDDDDDD", "D (Official Video)", "Artist D")
+    private val first = song("r7qovpFAGrQ", "Old Town Road", "Fixture Artist")
+    private val recommended = song("BBBBBBBBBBB", "B (Official Music Video)", "Fixture Artist")
+    private val manual = song("YnopHCL1Jk8", "Toca Toca (Official Video)", "Fixture Artist")
+    private val afterManual = song("DDDDDDDDDDD", "D (Official Video)", "Fixture Artist")
 
     @Before fun keepTestsOffline() {
         UpdateManager::class.java.getDeclaredField("lastAutomaticCheck").apply { isAccessible = true }
@@ -48,7 +48,7 @@ class RecommendationPlaybackTest {
             assertEquals(listOf("r7qovpFAGrQ"), fetchedIds.toList())
             val screen = MusicScreen(activity.get(), {}, {}, {}, {}, {}, {})
             screen.setNext(service.nextSong, service.song != null)
-            assertTrue(labels(screen.controls).contains("Next: B (Official Music Video) · Artist B"))
+            assertTrue(labels(screen.controls).contains("Next: B (Official Music Video) · Fixture Artist"))
             assertEquals(View.VISIBLE, screen.suggestionsButton.visibility)
 
             service.enqueue(manual)
@@ -122,7 +122,7 @@ class RecommendationPlaybackTest {
         try {
             service.resolveStream = { _, _ -> SongStream("asset:///mock-track.mp3") }
             service.relatedVideos = { _, _ ->
-                (1..20).map { song("track" + it.toString().padStart(6, '0'), "Track $it (Official Video)", "Artist") }
+                (1..20).map { song("track" + it.toString().padStart(6, '0'), "Track $it (Official Video)", "Fixture Artist") }
             }
             service.select(first)
             await { service.suggestedSongs().size == 20 }
@@ -153,7 +153,7 @@ class RecommendationPlaybackTest {
             service.relatedVideos = { _, _ -> listOf(first, recommended, recommended) }
             service.searchRecommendations = { _, _ ->
                 listOf(first, recommended) + (1..25).map {
-                    song("track" + it.toString().padStart(6, '0'), "Track $it (Official Video)", "Artist")
+                    song("track" + it.toString().padStart(6, '0'), "Track $it (Official Video)", "Fixture Artist")
                 }
             }
             service.select(first)
@@ -163,6 +163,17 @@ class RecommendationPlaybackTest {
             assertFalse(first.videoId in ids)
             assertEquals(recommended, service.nextSong)
         } finally { controller.destroy() }
+    }
+
+    @Test fun keepsMatchingLanguageAndDropsRemixes() {
+        val seed = song("AAAAAAAAAAA", "First (Hindi Song)", "Singer")
+        val matching = song("BBBBBBBBBBB", "Second (Hindi Song) Official Video", "Another singer")
+        val different = song("CCCCCCCCCCC", "Third (English Song) Official Video", "Singer")
+        val remix = song("DDDDDDDDDDD", "Fourth (Hindi Song) Official Video Remix", "Singer")
+        val unknown = song("EEEEEEEEEEE", "Fifth (Official Video)", "Another singer")
+        val recommendations = Recommendations()
+        recommendations.feedback(seed, different, 1.0)
+        assertEquals(listOf(matching), recommendations.rank(seed, listOf(different, remix, unknown, matching)))
     }
 
     private fun await(condition: () -> Boolean) {

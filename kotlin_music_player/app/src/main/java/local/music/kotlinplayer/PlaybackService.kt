@@ -179,11 +179,12 @@ class PlaybackService : MediaSessionService() {
     private fun discover(seed: Song, request: Int) {
         val id = seed.videoId ?: return
         val requestJob = radioJob
+        val language = seed.languageHint()?.takeUnless { it.endsWith("-script") || it in listOf("devanagari", "cyrillic") }.orEmpty()
         val queries = listOf(
             "${seed.artist} official music video",
             "${seed.title} ${seed.artist} official music video",
             "music similar to ${seed.artist} ${seed.title} official music video",
-        ).distinct()
+        ).map { "$it $language".trim() }.distinct()
 
         fun load(fetch: () -> List<Song>, onResult: (List<Song>) -> Unit) {
             radioTask = radio.submit {

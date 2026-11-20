@@ -39,7 +39,7 @@ class RecommendationPlaybackTest {
             service.resolveStream = { _, _ -> SongStream("asset:///mock-track.mp3") }
             service.relatedVideos = { videoId, _ ->
                 fetchedIds.add(videoId)
-                if (videoId == first.videoId) listOf(first, recommended, recommended)
+                if (videoId == first.videoId) listOf(first, recommended, recommended, afterManual)
                 else if (videoId == manual.videoId) listOf(afterManual)
                 else emptyList()
             }
@@ -47,13 +47,13 @@ class RecommendationPlaybackTest {
             await { service.nextSong == recommended }
             assertEquals(listOf("r7qovpFAGrQ"), fetchedIds.toList())
             val screen = MusicScreen(activity.get(), {}, {}, {}, {}, {}, {})
-            screen.setNext(service.nextSong, service.canSkipSuggestion)
+            screen.setNext(service.nextSong, service.song != null)
             assertTrue(labels(screen.controls).contains("Next: B (Official Music Video) · Artist B"))
-            assertEquals(View.VISIBLE, screen.skipSuggestion.visibility)
+            assertEquals(View.VISIBLE, screen.suggestionsButton.visibility)
 
             service.enqueue(manual)
             assertEquals(manual, service.nextSong)
-            assertFalse(service.canSkipSuggestion)
+            assertEquals(listOf(recommended, afterManual), service.suggestedSongs())
             service.trackEnded()
             await { service.song == manual && service.nextSong == afterManual }
             service.trackEnded()

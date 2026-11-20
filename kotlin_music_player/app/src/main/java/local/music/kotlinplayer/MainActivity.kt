@@ -85,6 +85,9 @@ class MainActivity : Activity() {
     private var progress = 1f
     private var animation: ValueAnimator? = null
     private var settingsDialog: AlertDialog? = null
+    private var suggestionsDialog: AlertDialog? = null
+    private var suggestionsList: LinearLayout? = null
+    private var shownSuggestions: List<Song>? = null
     private var videoFps = 8
     private var lastFrame = 0L
 
@@ -196,11 +199,7 @@ class MainActivity : Activity() {
             showControls()
             true
         }
-        screen.skipSuggestion.setOnClickListener {
-            playback?.skipSuggestion()
-            syncTrack()
-            showControls()
-        }
+        screen.suggestionsButton.setOnClickListener { showSuggestions() }
         playbackArea.contentDescription = "Show playback controls"
         playbackArea.setOnClickListener { showControls() }
         controls.setOnClickListener { showControls() }
@@ -272,7 +271,8 @@ class MainActivity : Activity() {
 
     private fun syncTrack() {
         val service = playback ?: return
-        screen.setNext(service.nextSong, service.canSkipSuggestion)
+        screen.setNext(service.nextSong, service.song != null)
+        refreshSuggestions()
         val song = service.song ?: return
         if (playingUrl == song.url) return
         playingUrl = song.url
@@ -372,7 +372,50 @@ class MainActivity : Activity() {
     }
     private inner class ResultRow : SongRow(this@MainActivity)
 
+    private fun showSuggestions() {
+        if (suggestionsDialog != null) return
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+        }
+        val scroll = ScrollView(this).apply { addView(list) }
+        val dialog = AlertDialog.Builder(this).setTitle("Suggested songs")
+            .setView(scroll).setPositiveButton("Done", null).create()
+        suggestionsList = list
+        suggestionsDialog = dialog
+        dialog.setOnDismissListener {
+            suggestionsDialog = null
+            suggestionsList = null
+            shownSuggestions = null
+        }
+        refreshSuggestions()
+        dialog.show()
+    }
+
+    private fun refreshSuggestions() {
+        val list = suggestionsList ?: return
+        val songs = playback?.suggestedSongs().orEmpty()
+        if (songs == shownSuggestions) return
+        shownSuggestions = songs
+        list.removeAllViews()
+        if (songs.isEmpty()) {
+            list.addView(label("No suggestions yet.", 14))
+            return
+        }
+        songs.forEachIndexed { index, song ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = RoomStyle.shape(this@MainActivity, 0xFF211D26.toInt(), 16, 0xFF302A36.toInt())
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+                addView(RoomStyle.label(this@MainActivity, "${index + 1}. ${song.title}", 14, medium = true))
+                addView(RoomStyle.label(this@MainActivity, song.artist, 12, RoomStyle.muted))
+            }
+            list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        }
+    }
+
     private fun showSettings() {
+        suggestionsDialog?.dismiss()
         settingsDialog?.dismiss()
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -472,6 +515,7 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         closed = true
         updates.close()
+        suggestionsDialog?.dismiss()
         settingsDialog?.dismiss()
         settingsDialog = null
         searchVersion++

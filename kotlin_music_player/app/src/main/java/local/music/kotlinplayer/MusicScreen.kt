@@ -45,15 +45,15 @@ class MusicScreen(
     val pause = RoomIconButton(activity, RoomIcon.PLAY, "Play", RoomStyle.mint, RoomStyle.background) { onInteraction(); onToggle() }
     val seekBar = SeekBar(activity)
     private val nextTitle = text("", 12, RoomStyle.muted)
-    val skipSuggestion = android.widget.Button(activity).apply {
-        text = "Skip"
-        contentDescription = "Skip next recommendation"
+    val suggestionsButton = android.widget.Button(activity).apply {
+        text = "Suggestions"
+        contentDescription = "Show suggested songs"
         minimumHeight = 0
         minHeight = 0
     }
     private val nextRow = LinearLayout(activity).apply { gravity = Gravity.CENTER_VERTICAL }
     private var displayedNext: Song? = null
-    private var displayedSkip = false
+    private var displayedTrack = false
     private val back = RoomIconButton(activity, RoomIcon.BACK, "Back 10 seconds") { onInteraction(); onSeek(-10000) }
     private val forward = RoomIconButton(activity, RoomIcon.FORWARD, "Forward 10 seconds") { onInteraction(); onSeek(10000) }
     private val elapsed = text("0:00", 10, RoomStyle.muted)
@@ -229,7 +229,7 @@ class MusicScreen(
         nextTitle.maxLines = 2
         nextTitle.ellipsize = TextUtils.TruncateAt.END
         nextRow.addView(nextTitle, LinearLayout.LayoutParams(0, -2, 1f))
-        nextRow.addView(skipSuggestion, vertical(-2, 48))
+        nextRow.addView(suggestionsButton, vertical(-2, 48))
         nextRow.visibility = View.GONE
         controls.addView(nextRow, vertical(-1, -2, top = 4))
         val transport = LinearLayout(activity).apply { gravity = Gravity.CENTER_VERTICAL }
@@ -365,13 +365,12 @@ class MusicScreen(
         emptyHint.text = "Check your connection, then search again."
         loading.visibility = View.GONE
     }
-    fun setNext(song: Song?, canSkip: Boolean) {
-        if (displayedNext == song && displayedSkip == canSkip) return
+    fun setNext(song: Song?, hasTrack: Boolean) {
+        if (displayedNext == song && displayedTrack == hasTrack) return
         displayedNext = song
-        displayedSkip = canSkip
+        displayedTrack = hasTrack
         nextTitle.text = song?.let { "Next: ${it.title} · ${it.artist}" }.orEmpty()
-        nextRow.visibility = if (song == null) View.GONE else View.VISIBLE
-        skipSuggestion.visibility = if (canSkip) View.VISIBLE else View.GONE
+        nextRow.visibility = if (hasTrack) View.VISIBLE else View.GONE
     }
 
     fun setTrackAvailable(value: Boolean) {

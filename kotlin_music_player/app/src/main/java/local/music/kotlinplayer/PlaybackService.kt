@@ -53,7 +53,7 @@ class PlaybackService : MediaSessionService() {
     private val suggestions = ArrayDeque<Song>()
     private var finished = false
     val nextSong: Song? get() = manualQueue.firstOrNull() ?: suggestions.firstOrNull()
-    val canSkipSuggestion: Boolean get() = manualQueue.isEmpty() && suggestions.isNotEmpty()
+    fun suggestedSongs(): List<Song> = suggestions.toList()
     internal var relatedVideos: (String, MusicSearch.Job) -> List<Song> = MusicSearch::related
     internal var resolveStream: (Song, MusicSearch.Job) -> SongStream = MusicSearch::resolve
     private val resolver = Executors.newSingleThreadExecutor()
@@ -142,12 +142,6 @@ class PlaybackService : MediaSessionService() {
         recommendations.feedback(current, selected, 1.0)
         manualQueue.addLast(selected)
         advance()
-    }
-
-    fun skipSuggestion() {
-        if (!canSkipSuggestion) return
-        val source = song ?: return
-        recommendations.feedback(source, suggestions.removeFirst(), -0.35)
     }
 
     internal fun trackEnded() {

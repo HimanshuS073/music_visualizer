@@ -14,6 +14,7 @@ import re
 import sys
 import tempfile
 import time
+import unicodedata
 from pathlib import Path
 
 VIDEO_TYPES = {"MUSIC_VIDEO_TYPE_OMV", "MUSIC_VIDEO_TYPE_UGC"}
@@ -28,9 +29,51 @@ LIVE_MARKER = re.compile(
 )
 STUDIO_MARKER = re.compile(r"\b(?:official\s+(?:music\s+)?video|studio\s+(?:version|recording))\b", re.I)
 
+REMIX_MARKER = re.compile(r"\b(?:re[\s-]?mix(?:ed|es)?|mash[\s-]?up|sped[\s-]?up|slowed|nightcore|bootleg|reverb)\b", re.I)
+LANGUAGE_LABEL = re.compile(
+    r"\b(english|hindi|urdu|punjabi|bengali|tamil|telugu|malayalam|kannada|marathi|"
+    r"gujarati|bhojpuri|nepali|spanish|portuguese|french|german|arabic|russian|korean|"
+    r"japanese|chinese|thai|turkish|indonesian)\s+(?:songs?|music|version|audio|video|lyrics)\b",
+    re.I,
+)
+LANGUAGE_SCRIPTS = {
+    "DEVANAGARI": "devanagari", "BENGALI": "bengali-script", "GURMUKHI": "punjabi",
+    "GUJARATI": "gujarati", "TAMIL": "tamil", "TELUGU": "telugu", "MALAYALAM": "malayalam",
+    "KANNADA": "kannada", "HANGUL": "korean", "HIRAGANA": "japanese", "KATAKANA": "japanese",
+    "ARABIC": "arabic-script", "CYRILLIC": "cyrillic", "THAI": "thai",
+}
+
+
+def language_hint(title):
+    hints = {match.group(1).casefold() for match in LANGUAGE_LABEL.finditer(title)}
+    if not hints:
+        for char in title:
+            if char.isalpha():
+                script = unicodedata.name(char, "").split(" ", 1)[0]
+                if script in LANGUAGE_SCRIPTS:
+                    hints.add(LANGUAGE_SCRIPTS[script])
+    return next(iter(hints)) if len(hints) == 1 else None
+
+
+def artist_keys(track):
+    keys = set()
+    for artist in track["artists"]:
+        name = re.sub(r"(?:\s*-\s*topic|vevo)$", "", artist.strip().casefold())
+        key = "".join(char for char in name if char.isalnum())
+        if key and key not in {"unknownartist", "unknownchannel"}:
+            keys.add(key)
+    return keys
+
+
+def language_compatible(seed_language, seed_artists, song):
+    language = language_hint(song["title"])
+    if seed_language and language:
+        return seed_language == language
+    return bool(seed_artists & artist_keys(song))
+
 
 def studio_candidate(title, kind):
-    return bool(title and kind in VIDEO_TYPES and not LIVE_MARKER.search(title)
+    return bool(title and kind in VIDEO_TYPES and not LIVE_MARKER.search(title) and not REMIX_MARKER.search(title)
                 and (kind == "MUSIC_VIDEO_TYPE_OMV" or STUDIO_MARKER.search(title)))
 
 
@@ -230,8 +273,11 @@ def personalized(seed, queue, listener, excluded=(), remembered=()):
     seen = set(excluded) | {seed["video_id"]}
     songs = {identity(seed)}
     ranked = []
+    seed_language = language_hint(seed["title"])
+    seed_artists = artist_keys(seed)
     for song, i in pool.values():
-        if song["video_id"] in seen or not studio_candidate(song["title"], song.get("video_type")):
+        if (song["video_id"] in seen or not studio_candidate(song["title"], song.get("video_type"))
+                or not language_compatible(seed_language, seed_artists, song)):
             continue
         x = features(seed, song, i)
         prior = 0.55 * x.get("radio_rank", 0.0)

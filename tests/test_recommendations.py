@@ -9,7 +9,7 @@ import threading
 import time
 import unittest
 
-from music_recommender import Listener, Radio, recommend, resolve_seed
+from music_recommender import Listener, Radio, personalized, recommend, resolve_seed, track_info
 from python_code_music.controls import get_status
 from python_code_music.recommendations import RecommendationTask
 
@@ -23,10 +23,10 @@ def video(video_id, title, artist, **fields):
 
 
 SONGS = {
-    A: video(A, "Old Town Road", "Lil Nas X"),
-    B: video(B, "Recommendation B", "Artist B"),
-    C: video(C, "Toca Toca", "Fly Project"),
-    D: video(D, "Recommendation D", "Artist D"),
+    A: video(A, "Old Town Road (English Song)", "Lil Nas X"),
+    B: video(B, "Recommendation B (English Song)", "Artist B"),
+    C: video(C, "Toca Toca (English Song)", "Fly Project"),
+    D: video(D, "Recommendation D (English Song)", "Artist D"),
 }
 
 
@@ -88,6 +88,17 @@ class RecommendationsTest(unittest.TestCase):
                     return replies
             time.sleep(.005)
         self.fail("Recommendation worker timed out")
+
+    def test_language_and_remix_filters_include_remembered_candidates(self):
+        source = resolve_seed(None, A, "First (Hindi Song)", "SingerVEVO")
+        matching = track_info(video(B, "Second (Hindi Song)", "Another singer"))
+        different = track_info(video(C, "Third (English Song)", "Singer"))
+        same_artist = track_info(video(D, "Fourth", "Singer - Topic"))
+        self.assertIsNone(track_info(video("EEEEEEEEEEE", "Fifth (Hindi Song Remix)", "Singer")))
+        listener = Listener(self.path / "feedback.csv")
+        listener.remember(source, different, 1)
+        rows = personalized(source, [different, matching, same_artist], listener)
+        self.assertEqual([row[1]["video_id"] for row in rows], [B, D])
 
     def test_exact_recording_skip_and_choice_survive_restart(self):
         task = self.task()

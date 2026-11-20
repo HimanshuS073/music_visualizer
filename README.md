@@ -89,6 +89,10 @@ autoplay off. History and the radio cache are stored locally in
 `data/next_song_bandit/`. Set `MUSIC_RECOMMENDER_DATA` to use a different folder.
 The standalone `python music_recommender.py --help` interface is still available.
 
+The desktop recommender matches language clues in video titles and filters out
+remixes, mashups, sped-up and slowed versions. When the language is unclear,
+it keeps suggestions to the same artist, which can leave a shorter list.
+
 ## Change the visualizer
 
 Edit `config.lua`, save it, and press **F5** in the player. You can change the
@@ -122,7 +126,7 @@ without the visualizer; press F5 after fixing the audio connection.
 
 ## Packaged versions
 
-Get the Linux and Windows installers from the [desktop release](https://github.com/HimanshuS073/music_visualizer/releases/tag/v0.2.0).
+Get the Linux and Windows installers from the [desktop release](https://github.com/HimanshuS073/music_visualizer/releases/tag/v0.2.1).
 The [Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.14) includes the Music Room APK.
 If you build locally, look for these files:
 

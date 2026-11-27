@@ -82,7 +82,9 @@ suggestion. Click **Suggestions** or press **G** to open the ranked list. Use
 the mouse wheel or arrow keys to scroll, and select any track to play it.
 Music Room searches for more matches when the initial list has fewer than 20.
 It refreshes suggestions for each new track and after a search. Recent plays and
-the latest search are saved locally. Right-click a search result or press **Shift+Enter** to queue it.
+the latest search are saved locally. Autoplay keeps the last song you chose as
+its starting point. Include a language such as `English songs` in your search
+to prioritize that language and exclude tracks with conflicting language clues. Right-click a search result or press **Shift+Enter** to queue it.
 **Skip** or **N** dismisses the next recommendation and leaves the current song
 playing. **Delete** skips a recommendation that's already playing. A search
 that you don't select and a song started by autoplay don't train the listener.
@@ -131,15 +133,15 @@ without the visualizer; press F5 after fixing the audio connection.
 
 ## Packaged versions
 
-Get the Linux and Windows installers from the [desktop release](https://github.com/HimanshuS073/music_visualizer/releases/tag/v0.2.4).
-The [Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.17) includes the Music Room APK.
+Get the Linux and Windows installers from the [desktop release](https://github.com/HimanshuS073/music_visualizer/releases/tag/v0.2.5).
+The [Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.18) includes the Music Room APK.
 If you build locally, look for these files:
 
 | Platform | Local file | Requirements |
 | --- | --- | --- |
 | Linux | `dist/music-player-linux-recommendations.run` | x86-64 Linux with graphics and PipeWire/PulseAudio |
 | Windows | `dist/music-player-windows-recommendations.exe` | Windows 10/11, 64-bit |
-| Android | `kotlin_music_player/releases/music-room-v18.apk` | Android 8.0 or newer |
+| Android | `kotlin_music_player/releases/music-room-v19.apk` | Android 8.0 or newer |
 
 These builds include their app dependencies. You still need internet access,
 working graphics drivers, and an audio output. Linux also uses your existing
@@ -189,7 +191,7 @@ Windows hardware.
 
 ### Android — Music Room
 
-Download [Music Room 1.17](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.17)
+Download [Music Room 1.18](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.18)
 or use **Settings → Check updates** in the installed app.
 
 Long-press a search result to queue it. Tap **Suggestions** to open the full ranked list. When a track ends, the player checks

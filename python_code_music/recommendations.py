@@ -93,6 +93,7 @@ class RecommendationTask:
                     request["title"], request.get("artist"),
                     excluded=request.get("excluded", []), use_knn=request.get("knn", False),
                     fill=request.get("fill", False), query=request.get("query") or "",
+                    chosen=request.get("chosen", True),
                     on_fast=lambda rows: publish(rows, done=False), cancelled=cancelled.is_set,
                 )
                 publish(rows)

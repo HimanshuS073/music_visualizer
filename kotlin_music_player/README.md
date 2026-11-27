@@ -91,7 +91,7 @@ Then run:
 ```
 
 The result is `app/build/outputs/apk/debug/app-debug.apk`. Local checked copies
-are kept in `releases/`; GitHub installers use names such as `music-room-v18.apk`.
+are kept in `releases/`; GitHub installers use names such as `music-room-v19.apk`.
 The number in the filename is Android's version code, not its display version.
 
 The application ID is `local.music.kotlinplayer`, so it can be installed beside
@@ -104,7 +104,7 @@ an installation signed with the original key.
 ## App updates
 
 Install the latest Music Room APK from the
-[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.17).
+[Android release](https://github.com/HimanshuS073/music_visualizer/releases/tag/android-v1.18).
 Earlier APKs don't contain the updater.
 
 On launch, Music Room checks public GitHub releases in the background. When a
@@ -129,7 +129,7 @@ playing. Pending installer permissions survive normal activity recreation.
 
 The updater looks through the 100 most recent releases, ignores drafts and
 prereleases, and only accepts Android tags like `android-v1.3` with assets named
-`music-room-v18.apk`. Desktop releases don't affect it. The asset must include
+`music-room-v19.apk`. Desktop releases don't affect it. The asset must include
 GitHub's SHA-256 digest. It selects the highest newer version code.
 
 ## Publishing the next Android update

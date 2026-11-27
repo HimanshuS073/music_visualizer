@@ -73,6 +73,24 @@ internal class Recommendations(private val preferences: SharedPreferences? = nul
     var searchQuery = preferences?.getString("last_search", "").orEmpty()
         private set
 
+    var chosenSong: Song? = runCatching {
+        val saved = JSONArray(preferences?.getString("last_chosen", "[]") ?: "[]")
+        val id = saved.getString(0)
+        require(videoIdPattern.matches(id))
+        Song(saved.getString(1), saved.getString(2), "https://www.youtube.com/watch?v=$id",
+            0, "", "", saved.optString(3))
+    }.getOrNull()
+        private set
+
+    fun focusLanguage(anchor: Song): String? =
+        titleLanguage("$searchQuery songs") ?: titleLanguage("${anchor.searchQuery} songs") ?: anchor.languageHint()
+
+    fun choose(song: Song) {
+        chosenSong = song
+        preferences?.edit()?.putString("last_chosen",
+            JSONArray(listOf(song.videoId, song.title, song.artist, song.searchQuery)).toString())?.apply()
+    }
+
     fun searched(query: String): Boolean {
         val next = query.trim().take(240)
         if (next == searchQuery) return false
@@ -91,10 +109,12 @@ internal class Recommendations(private val preferences: SharedPreferences? = nul
         preferences?.edit()?.apply {
             putString("last_played", track)
             putString("recent_ids", recent.joinToString(","))
-            if (chosen) putString("last_chosen", track)
             apply()
         }
-        if (chosen) observe(song)
+        if (chosen) {
+            choose(song)
+            observe(song)
+        }
     }
 
     private fun searchAffinity(song: Song): Double {
@@ -155,10 +175,10 @@ internal class Recommendations(private val preferences: SharedPreferences? = nul
         artistWeights[artist] = weight + 0.2 * (reward - weight)
     }
 
-    fun rank(seed: Song, candidates: List<Song>): List<Song> {
+    fun rank(seed: Song, candidates: List<Song>, anchor: Song = seed): List<Song> {
         val priorChoices = transitions[seed.videoId].orEmpty()
-        val language = seed.preferenceLanguage()
-        val seedProfile = seed.profile()
+        val language = focusLanguage(anchor)
+        val seedProfile = anchor.profile()
         val pool = linkedMapOf<String, Pair<Song, Double>>()
         for (song in candidates) {
             val id = song.videoId ?: continue
@@ -173,8 +193,9 @@ internal class Recommendations(private val preferences: SharedPreferences? = nul
             .sortedByDescending { (song, prior) ->
                 prior + 0.12 * tanh(artistWeights[identity(song).second] ?: 0.0) +
                     0.85 * tanh(priorChoices[song.videoId]?.second ?: 0.0) +
-                    0.45 * neighborPreference(song, seedProfile) + searchAffinity(song) +
-                    (if (language != null && song.languageHint() == language) 0.14 else 0.0)
+                    0.45 * neighborPreference(song, seedProfile) + 3 * searchAffinity(song) +
+                    (if (anchor.artistKey().isNotEmpty() && anchor.artistKey() == song.artistKey()) 0.25 else 0.0) +
+                    (if (language != null && song.languageHint() == language) 0.40 else 0.0)
             }.map { it.first }.filter { identity(it) != identity(seed) }
             .distinctBy(::identity).take(SUGGESTION_COUNT)
     }

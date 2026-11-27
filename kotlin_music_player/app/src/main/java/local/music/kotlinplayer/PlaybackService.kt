@@ -46,7 +46,7 @@ class PlaybackService : MediaSessionService() {
     private val ui = Handler(Looper.getMainLooper())
     private lateinit var recommendations: Recommendations
     private val radio = Executors.newSingleThreadExecutor()
-    private val radioCache = android.util.LruCache<Pair<String, String>, List<Song>>(32)
+    private val radioCache = android.util.LruCache<Triple<String, String, String>, List<Song>>(32)
     private var radioJob = MusicSearch.Job()
     private var radioTask: Future<*>? = null
     private val manualQueue = ArrayDeque<Song>()
@@ -200,16 +200,18 @@ class PlaybackService : MediaSessionService() {
         val id = seed.videoId ?: return
         val requestJob = radioJob
         val searchContext = recommendations.searchQuery
-        val cacheKey = id to searchContext
-        val language = seed.languageHint()?.takeUnless { it.endsWith("-script") || it in listOf("devanagari", "cyrillic") }.orEmpty()
-        val artist = seed.artist.replace(Regex("""(?:\s*-\s*topic|vevo)$""", RegexOption.IGNORE_CASE), "").trim()
+        val anchor = if (learnCurrent) seed else recommendations.chosenSong ?: seed
+        val anchorId = anchor.videoId ?: id
+        val cacheKey = Triple(anchorId, searchContext, anchor.searchQuery)
+        val language = recommendations.focusLanguage(anchor)?.takeUnless { it.endsWith("-script") || it in listOf("devanagari", "cyrillic") }.orEmpty()
+        val artist = anchor.artist.replace(Regex("""(?:\s*-\s*topic|vevo)$""", RegexOption.IGNORE_CASE), "").trim()
         val queries = buildList {
             add("$artist official music video")
             add("$artist studio songs")
             add("$artist album music videos")
-            add("${seed.title} $artist official music video")
-            if (seed.searchQuery.isNotBlank()) add("${seed.searchQuery} related music videos")
-            add("music similar to ${seed.title} $artist")
+            add("${anchor.title} $artist official music video")
+            if (anchor.searchQuery.isNotBlank()) add("${anchor.searchQuery} related music videos")
+            add("music similar to ${anchor.title} $artist")
             if (language.isNotEmpty()) add("$language songs official music video")
         }.distinct()
 
@@ -223,7 +225,7 @@ class PlaybackService : MediaSessionService() {
         }
 
         fun fill(candidates: List<Song>, queryIndex: Int) {
-            val ranked = recommendations.rank(seed, candidates)
+            val ranked = recommendations.rank(seed, candidates, anchor)
             val complete = ranked.size >= SUGGESTION_COUNT || queryIndex == queries.size
             if (ranked != suggestedSongs()) {
                 suggestions.clear()
@@ -242,9 +244,9 @@ class PlaybackService : MediaSessionService() {
 
         val cached = radioCache.get(cacheKey)
         if (cached != null) fill(cached, 0)
-        else load({ relatedVideos(id, requestJob) }) { related ->
-            if (searchContext.isNotBlank() && searchContext != seed.searchQuery) {
-                load({ searchRecommendations("$searchContext official music video", requestJob) }) { more ->
+        else load({ relatedVideos(anchorId, requestJob) }) { related ->
+            if (searchContext.isNotBlank()) {
+                load({ searchRecommendations("$searchContext $language official music video", requestJob) }) { more ->
                     fill(related + more, 0)
                 }
             } else fill(related, 0)

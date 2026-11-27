@@ -100,6 +100,21 @@ class RecommendationsTest(unittest.TestCase):
         rows = personalized(source, [different, matching, same_artist], listener)
         self.assertEqual([row[1]["video_id"] for row in rows], [B, D])
 
+    def test_autoplay_keeps_the_chosen_song_and_explicit_search_language(self):
+        listener = Listener(self.path / "feedback.csv")
+        listener.played(seed(A), chosen=True)
+        listener.searched("English songs")
+        played_next = resolve_seed(None, C, "Automatic (Hindi Song)", "Different singer")
+        listener.played(played_next)
+        self.api.queues[A] = [
+            video(D, "Wrong language (Hindi Song)", "Different singer"),
+            SONGS[B],
+        ]
+        radio = Radio(self.api, self.path / "cache")
+        rows = recommend(radio, listener, C, played_next["title"], played_next["artists"], chosen=False)
+        self.assertEqual(self.api.calls, [(A, True)])
+        self.assertEqual([row[1]["video_id"] for row in rows], [B])
+
     def test_recent_plays_and_search_are_restored_and_used(self):
         path = self.path / "feedback.csv"
         listener = Listener(path)

@@ -278,7 +278,7 @@ local function refresh_recommendations()
     tracks.request = request("recommend", {video_id=selected_song.video_id,
         title=selected_song.title, artist=artist_of(selected_song),
         exclude=table.concat(tracks.recent, ","), fill=true, query=selected_song.search_query or "",
-        knn=settings.knn == true}, "recommend")
+        chosen=selected_song.learn == true, knn=settings.knn == true}, "recommend")
     tracks.waiting = tracks.request ~= nil
 end
 
